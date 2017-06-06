@@ -16,7 +16,7 @@ def quicksort(x):
     return(smallerSorted+[x[0]]+biggerSorted)   
 
 
-def getSentenceData(path, vocabulary_size=8000):
+def getSentenceData(path, vocabulary_size=8000, class_dim=100):
     unknown_token = "UNKNOWN_TOKEN"
     sentence_start_token = "SENTENCE_START"
     sentence_end_token = "SENTENCE_END"
@@ -41,11 +41,20 @@ def getSentenceData(path, vocabulary_size=8000):
     print("Found %d unique words tokens." % len(word_freq.items()))
 
     # Get the most common words and build index_to_word and word_to_index vectors
+    # 定めた語彙数文だけの単語でvocabを作る
     vocab = word_freq.most_common(vocabulary_size-1)
+    '''
+    V = word_freq.most_common()
+    icount = np.array([x[1] for x in V])
+    num_tokens = np.sum(icount)
+    '''
     index_to_word = [x[0] for x in vocab]
     index_to_word.append(unknown_token)
     word_to_index = dict([(w,i) for i,w in enumerate(index_to_word)])
-
+    index_to_count = [x[1] for x in vocab]
+    
+    
+    
     print("Using vocabulary size %d." % vocabulary_size)
     print("The least frequent word in our vocabulary is '%s' and appeared %d times." % (vocab[-1][0], vocab[-1][1]))
 
@@ -60,6 +69,46 @@ def getSentenceData(path, vocabulary_size=8000):
     X_train = np.asarray([[word_to_index[w] for w in sent[:-1]] for sent in tokenized_sentences])
     y_train = np.asarray([[word_to_index[w] for w in sent[1:]] for sent in tokenized_sentences])
 
+    # 単語が所属するクラスをクラス分布で表す
+    index_to_class_dist = []
+    num_tokens = 0
+    for i in range(vocabulary_size-1):
+        num_tokens += index_to_count[i]
+    for i in range(vocabulary_size):
+        index_to_class_dist.append([0.0] * class_dim)
+        
+    class_to_list = []
+    for i in range(class_dim):
+        class_to_list.append([])
+    # 最後のクラスは未知語をもつ
+    class_to_list[class_dim - 1].append(vocabulary_size - 1)
+    # 未知語はクラスclass_size-1を予測する
+    index_to_class_dist[vocabulary_size - 1][class_dim - 1] = 1.0
+    
+    df = 0.0
+    a = 0
+    for i in range(vocabulary_size-1):
+        df += index_to_count[i] / num_tokens
+        if df > 1.0:
+            df = 1.0
+        if df > (a + 1) / (class_dim - 1):
+            index_to_class_dist[i][a] = 1.0
+            class_to_list[a].append(i)
+            if a < class_dim - 2:
+                a += 1
+        else:
+            index_to_class_dist[i][a] = 1.0
+            class_to_list[a].append(i)
+
+    # 作成したクラスターを表示する
+    '''
+    for i in range(class_dim):
+        print("\nclass %d"%i)
+        word_list = class_to_list[i]
+        for w in word_list:
+            print("%d : %s"%(w,index_to_word[w]))
+    '''
+            
     #文の長さの分布を求める
     '''
     max_len = 0
@@ -87,7 +136,6 @@ def getSentenceData(path, vocabulary_size=8000):
 
     print("X_train shape: " + str(X_train.shape))
     print("y_train shape: " + str(y_train.shape))
-
     # Print an training data example
     x_example, y_example = X_train[17], y_train[17]
     print("x:\n%s\n%s" % (" ".join([index_to_word[x] for x in x_example]), x_example))
