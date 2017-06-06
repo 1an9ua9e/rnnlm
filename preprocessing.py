@@ -6,6 +6,7 @@ import nltk
 import matplotlib
 matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
+import sys
 
 def quicksort(x):
     if x==[]: return []
@@ -15,8 +16,35 @@ def quicksort(x):
 
     return(smallerSorted+[x[0]]+biggerSorted)   
 
+def comb_sort(x):
+    data_size = len(x)
+    gap = data_size
+    flag = True
+    change = 0
+    while True:
+        gap = int(gap * 10 / 13)
+        if gap == 0:
+            gap = 1
+        flag = True
+        for i in range(data_size):
+            if i >= data_size - gap:
+                break
+            if len(x[i]) > len(x[i + gap]):
+                change += 1
+                flag = False
+                temp = x[i]
+                x[i] = x[i + gap]
+                x[i + gap] = temp
+                sys.stdout.write("\rchange : %d, gap : %d"%(change,gap))
+                sys.stdout.flush()
+        if flag and gap <= 1 :
+            break
+    return x
+                
+                
 
-def getSentenceData(path, vocabulary_size=8000, class_dim=100):
+
+def getSentenceData(path, vocabulary_size=8000, class_dim=0):
     unknown_token = "UNKNOWN_TOKEN"
     sentence_start_token = "SENTENCE_START"
     sentence_end_token = "SENTENCE_END"
@@ -72,33 +100,34 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=100):
     # 単語が所属するクラスをクラス分布で表す
     index_to_class_dist = []
     num_tokens = 0
-    for i in range(vocabulary_size-1):
-        num_tokens += index_to_count[i]
-    for i in range(vocabulary_size):
-        index_to_class_dist.append([0.0] * class_dim)
-        
     class_to_list = []
-    for i in range(class_dim):
-        class_to_list.append([])
-    # 最後のクラスは未知語をもつ
-    class_to_list[class_dim - 1].append(vocabulary_size - 1)
-    # 未知語はクラスclass_size-1を予測する
-    index_to_class_dist[vocabulary_size - 1][class_dim - 1] = 1.0
+    if class_dim > 0:
+        for i in range(vocabulary_size-1):
+            num_tokens += index_to_count[i]
+        for i in range(vocabulary_size):
+            index_to_class_dist.append([0.0] * class_dim)
+        
+        for i in range(class_dim):
+            class_to_list.append([])
+        # 最後のクラスは未知語をもつ
+        class_to_list[class_dim - 1].append(vocabulary_size - 1)
+        # 未知語はクラスclass_size-1を予測する
+        index_to_class_dist[vocabulary_size - 1][class_dim - 1] = 1.0
     
-    df = 0.0
-    a = 0
-    for i in range(vocabulary_size-1):
-        df += index_to_count[i] / num_tokens
-        if df > 1.0:
-            df = 1.0
-        if df > (a + 1) / (class_dim - 1):
-            index_to_class_dist[i][a] = 1.0
-            class_to_list[a].append(i)
-            if a < class_dim - 2:
-                a += 1
-        else:
-            index_to_class_dist[i][a] = 1.0
-            class_to_list[a].append(i)
+        df = 0.0
+        a = 0
+        for i in range(vocabulary_size-1):
+            df += index_to_count[i] / num_tokens
+            if df > 1.0:
+                df = 1.0
+            if df > (a + 1) / (class_dim - 1):
+                index_to_class_dist[i][a] = 1.0
+                class_to_list[a].append(i)
+                if a < class_dim - 2:
+                    a += 1
+            else:
+                index_to_class_dist[i][a] = 1.0
+                class_to_list[a].append(i)
 
     # 作成したクラスターを表示する
     '''
@@ -131,8 +160,8 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=100):
     plt.show()
     '''
     #文の長さで教師データをソートする
-    #X_train = np.asarray(quicksort(X_train))
-    #y_train = np.asarray(quicksort(y_train))
+    X_train = np.asarray(comb_sort(X_train))
+    y_train = np.asarray(comb_sort(y_train))
 
     print("X_train shape: " + str(X_train.shape))
     print("y_train shape: " + str(y_train.shape))
@@ -141,7 +170,10 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=100):
     print("x:\n%s\n%s" % (" ".join([index_to_word[x] for x in x_example]), x_example))
     print("\ny:\n%s\n%s" % (" ".join([index_to_word[x] for x in y_example]), y_example))
 
-    return X_train, y_train
+    if class_dim > 0:
+        return X_train, y_train, index_to_class_dist, index_to_list
+    else:
+        return X_train, y_train
 
 if __name__ == '__main__':
     X_train, y_train = getSentenceData('data/reddit-comments-2015-08.csv')

@@ -11,7 +11,7 @@ import itertools as itr
 import utils
 
 class ClassModel:
-    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4,class_dim=0):
+    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4,class_dim=0,index_to_class_dist=[],index_to_word_list=[]):
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.class_dim = class_dim
@@ -21,6 +21,8 @@ class ClassModel:
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
         self.Q = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (class_dim, hidden_dim))
 
+        self.class_dist = index_to_class_dist
+        self.word_list = index_to_word_list
     '''
         forward propagation (predicting word probabilities)
         x is one single data, and a batch of data
@@ -68,6 +70,8 @@ class ClassModel:
         loss = 0.0
         for i, layer in enumerate(layers):
             loss += output.loss(layer.mulv, y[i])
+            c_i = np.argmax(self.class_dist[y[i]])
+            loss += output.loss(layer.mulq, c_i) + output.loss()
         return loss / float(len(y))
 
     def calculate_total_loss(self, X, Y):
@@ -90,7 +94,8 @@ class ClassModel:
         diff_s = np.zeros(self.hidden_dim)
         for t in range(0, T):
             dmulv = output.diff(layers[t].mulv, y[t])
-            dmulq = output.diff(layers[t].mulq, c[t])
+            c_t = np.argmax(self.class_dist[y[t]])
+            dmulq = output.diff(layers[t].mulq, c_t)
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq)

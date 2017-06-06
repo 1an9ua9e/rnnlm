@@ -20,13 +20,21 @@ class_dim = args.class_dim
 class_type = args.class_type # frequency binning
 batch_size = 
 '''
-X_train, y_train = getSentenceData('data/reddit-comments-2015-08.csv', args.word_dim)
+
+if int(args.class_dim) > 0:
+    X_train, y_train, index_to_class_dist, index_to_word_list = getSentenceData('data/reddit-comments-2015-08.csv', int(args.word_dim), int(args.class_dim))
+else:
+    X_train, y_train = getSentenceData('data/reddit-comments-2015-08.csv', int(args.word_dim), int(args.class_dim))
 
 np.random.seed(10)
-rnn = Model(args.word_dim, args.hidden_dim)
-#class_rnn = ClassModel(word_dim, hidden_dim, class_dim)
 start = time.time()
-losses = rnn.train(X_train[:10000], y_train[:10000], learning_rate=0.005, nepoch=1, evaluate_loss_after=1,batch_size=1)
-#losses = class_rnn.train(X_train[:10000], y_train[:10000], learning_rate=0.005, nepoch=1, evaluate_loss_after=1,batch_size=1)
+
+if int(args.class_dim) > 0:
+    class_rnn = ClassModel(int(args.word_dim), int(args.hidden_dim), int(args.class_dim), index_to_class_dist, index_to_word_list)
+    losses = class_rnn.train(X_train[:10000], y_train[:10000], learning_rate=0.005, nepoch=int(args.epoch), evaluate_loss_after=1,batch_size=int(args.batch_size))
+else:
+    rnn = Model(int(args.word_dim), int(args.hidden_dim))
+    losses = rnn.train(X_train[:10000], y_train[:10000], learning_rate=0.005, nepoch=int(args.epoch), evaluate_loss_after=1,batch_size=int(args.batch_size))
+
 print("training time : %.2f[s]"%(time.time() - start))
 

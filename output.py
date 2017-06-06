@@ -13,3 +13,4 @@ class Softmax:
         probs = self.predict(x)
         probs[y] -= 1.0
         return probs
+
