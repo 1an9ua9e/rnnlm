@@ -139,17 +139,18 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0):
     '''
             
     #文の長さの分布を求める
-    '''
     max_len = 0
     min_len = 10000
-    num_sents = len(X_train)
+    num_sents = len(X_train[:10000])
     sents_list = []
+    sents_list_higher_100 = []
     for k in range(num_sents):
         v = len(X_train[k])
         if v < 100:
             sents_list.append(v)
         else:
-            print(v)
+            sents_list_higher_100.append(v)
+            print("\ntrain %d\n%s"%(k,X_train[k]))
         if max_len < v:
             max_len = v
             print("max length %d"%max_len)
@@ -158,7 +159,10 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0):
     print("%d / %d"%(len(sents_list),num_sents))
     plt.hist(sents_list,bins=20)
     plt.show()
-    '''
+
+    plt.hist(sents_list_higher_100,bins=20)
+    plt.show()
+
     #文の長さで教師データをソートする
     X_train = np.asarray(comb_sort(X_train))
     y_train = np.asarray(comb_sort(y_train))
