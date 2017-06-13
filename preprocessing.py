@@ -8,14 +8,6 @@ matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 import sys
 
-def quicksort(x):
-    if x==[]: return []
-
-    smallerSorted = quicksort([a for a in x[1:] if len(a) <= len(x[0])])
-    biggerSorted = quicksort([a for a in x[1:] if len(a) > len(x[0])])
-
-    return(smallerSorted+[x[0]]+biggerSorted)   
-
 def comb_sort(x):
     data_size = len(x)
     gap = data_size
@@ -100,7 +92,7 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0):
     # 単語が所属するクラスをクラス分布で表す
     index_to_class_dist = []
     num_tokens = 0
-    class_to_list = []
+    class_to_word_list = []
     if class_dim > 0:
         for i in range(vocabulary_size-1):
             num_tokens += index_to_count[i]
@@ -108,9 +100,9 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0):
             index_to_class_dist.append([0.0] * class_dim)
         
         for i in range(class_dim):
-            class_to_list.append([])
+            class_to_word_list.append([])
         # 最後のクラスは未知語をもつ
-        class_to_list[class_dim - 1].append(vocabulary_size - 1)
+        class_to_word_list[class_dim - 1].append(vocabulary_size - 1)
         # 未知語はクラスclass_size-1を予測する
         index_to_class_dist[vocabulary_size - 1][class_dim - 1] = 1.0
     
@@ -122,12 +114,12 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0):
                 df = 1.0
             if df > (a + 1) / (class_dim - 1):
                 index_to_class_dist[i][a] = 1.0
-                class_to_list[a].append(i)
+                class_to_word_list[a].append(i)
                 if a < class_dim - 2:
                     a += 1
             else:
                 index_to_class_dist[i][a] = 1.0
-                class_to_list[a].append(i)
+                class_to_word_list[a].append(i)
 
     # 作成したクラスターを表示する
     '''
@@ -139,6 +131,7 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0):
     '''
             
     #文の長さの分布を求める
+    '''
     max_len = 0
     min_len = 10000
     num_sents = len(X_train[:10000])
@@ -162,7 +155,7 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0):
 
     plt.hist(sents_list_higher_100,bins=20)
     plt.show()
-
+    '''
     #文の長さで教師データをソートする
     X_train = np.asarray(comb_sort(X_train))
     y_train = np.asarray(comb_sort(y_train))
@@ -175,7 +168,7 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0):
     print("\ny:\n%s\n%s" % (" ".join([index_to_word[x] for x in y_example]), y_example))
 
     if class_dim > 0:
-        return X_train, y_train, index_to_class_dist, index_to_list
+        return X_train, y_train, index_to_class_dist, class_to_word_list
     else:
         return X_train, y_train
 

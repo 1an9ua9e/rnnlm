@@ -3,11 +3,18 @@ import numpy as np
 class MultiplyGate:
     def forward(self,W, x):
         return np.dot(W, x)
+    
+    #クラスベース言語モデル用に、部分的な順伝搬計算を行う。
+    def sub_forward():
+        return a
 
     def backward(self, W, x, dz):
         dW = np.asarray(np.dot(np.transpose(np.asmatrix(dz)), np.asmatrix(x)))
         dx = np.dot(np.transpose(W), dz)
         return dW, dx
+
+    def sub_backward():
+        return a
 
 class AddGate:
     def forward(self, x1, x2):

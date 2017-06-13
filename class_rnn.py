@@ -11,7 +11,7 @@ import itertools as itr
 import utils
 
 class ClassModel:
-    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4,class_dim=0,index_to_class_dist=[],index_to_word_list=[]):
+    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4,class_dim=0,index_to_class_dist=[],class_to_word_list=[]):
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.class_dim = class_dim
@@ -22,7 +22,7 @@ class ClassModel:
         self.Q = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (class_dim, hidden_dim))
 
         self.class_dist = index_to_class_dist
-        self.word_list = index_to_word_list
+        self.word_list = class_to_word_list
     '''
         forward propagation (predicting word probabilities)
         x is one single data, and a batch of data

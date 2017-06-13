@@ -14,3 +14,11 @@ class Softmax:
         probs[y] -= 1.0
         return probs
 
+class ClassSoftmax:
+    def predict(self, x, word_list):
+        
+
+    def loss():
+        return
+    def diff():
+        return

@@ -32,6 +32,8 @@ class ClassRNNLayer:
         self.s = activation.forward(self.add)
         self.mulv = mulGate.forward(V, self.s)
         self.mulq = mulGate.forward(Q, self.s)
+        class_index = np.argmax(self.mulq)
+        
 
     def backward(self, x, prev_s, U, W, V, Q, diff_s, dmulv, dmulq):
         self.forward(x, prev_s, U, W, V, Q)
