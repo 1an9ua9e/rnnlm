@@ -5,6 +5,7 @@ import math
 import numpy as np
 import sys
 from layer import RNNLayer
+from layer import ClassRNNLayer
 from output import Softmax
 import multiprocessing as mp
 import itertools as itr
@@ -35,7 +36,7 @@ class ClassModel:
         prev_s = np.zeros(self.hidden_dim)
         # For each time step...
         for t in range(T):
-            layer = ClassRNNLayer()
+            layer = ClassRNNLayer(self.word_list)
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             layer.forward(input, prev_s, self.U, self.W, self.V,self.Q)
@@ -83,6 +84,7 @@ class ClassModel:
     def bptt(self, x, y):
         assert len(x) == len(y)
         output = Softmax()
+        class_output = ClassSoftmax()
         layers = self.forward_propagation(x)
         dU = np.zeros(self.U.shape)
         dV = np.zeros(self.V.shape)
@@ -94,8 +96,7 @@ class ClassModel:
         diff_s = np.zeros(self.hidden_dim)
         for t in range(0, T):
             dmulv = output.diff(layers[t].mulv, y[t])
-            c_t = np.argmax(self.class_dist[y[t]])
-            dmulq = output.diff(layers[t].mulq, c_t)
+            dmulq = class_output.diff(np.array(self.class_dist))
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq)
