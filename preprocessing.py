@@ -36,7 +36,7 @@ def comb_sort(x):
                 
 
 
-def getSentenceData(path, vocabulary_size=8000, class_dim=0):
+def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
     unknown_token = "UNKNOWN_TOKEN"
     sentence_start_token = "SENTENCE_START"
     sentence_end_token = "SENTENCE_END"
@@ -157,9 +157,10 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0):
     plt.show()
     '''
     #文の長さで教師データをソートする
-    X_train = np.asarray(comb_sort(X_train))
-    y_train = np.asarray(comb_sort(y_train))
-
+    if sort:
+        X_train = np.asarray(comb_sort(X_train))
+        y_train = np.asarray(comb_sort(y_train))
+    
     print("X_train shape: " + str(X_train.shape))
     print("y_train shape: " + str(y_train.shape))
     # Print an training data example

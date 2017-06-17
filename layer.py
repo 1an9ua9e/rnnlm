@@ -1,5 +1,6 @@
 from activation import Tanh
 from gate import AddGate, MultiplyGate
+import numpy as np
 
 mulGate = MultiplyGate()
 addGate = AddGate()
@@ -27,8 +28,7 @@ class RNNLayer:
 class ClassRNNLayer:
     def __init__(self, word_list):
         self.word_list = word_list
-        
-    
+            
     def forward(self, x ,prev_s, U, W, V, Q):
         self.mulu = mulGate.forward(U, x)
         self.mulw = mulGate.forward(W, prev_s)
@@ -44,6 +44,7 @@ class ClassRNNLayer:
     def backward(self, x, prev_s, U, W, V, Q, diff_s, dmulv, dmulq):
         self.forward(x, prev_s, U, W, V, Q)
         # 以下のコードは部分的にbackwardする処理になっているか？
+        # dV, dsv = mulGate.sub_backward(V, self.s, dmulv)
         dV, dsv = mulGate.backward(V, self.s, dmulv)
         dQ, dsq = mulGate.backward(Q, self.s, dmulq)
         ds = dsv + dsq + diff_s

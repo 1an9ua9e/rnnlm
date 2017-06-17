@@ -7,6 +7,7 @@ import sys
 from layer import RNNLayer
 from layer import ClassRNNLayer
 from output import Softmax
+from output import ClassSoftmax
 import multiprocessing as mp
 import itertools as itr
 import utils
@@ -22,8 +23,8 @@ class ClassModel:
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
         self.Q = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (class_dim, hidden_dim))
 
-        self.class_dist = index_to_class_dist
-        self.word_list = class_to_word_list
+        self.class_dist = np.array(index_to_class_dist)
+        self.word_list = np.array(class_to_word_list)
     '''
         forward propagation (predicting word probabilities)
         x is one single data, and a batch of data
@@ -67,12 +68,21 @@ class ClassModel:
     def calculate_loss(self, x, y):
         assert len(x) == len(y)
         output = Softmax()
+        class_output = ClassSoftmax()
         layers = self.forward_propagation(x)
         loss = 0.0
         for i, layer in enumerate(layers):
+            # 単語の出力の損失だけを計算する場合
+            # update_loss = - log{ p(w_j|c(w_j),s) * p(c(w_j)|s) }
+            c_j = np.argmax(self.class_dist[y[i]])
+            loss += output.loss(layer.mulq, c_j)
+            loss += output.sub_loss(layer.mulv, y[i], self.word_list[c_j], c_j)
+            
+            # 単語とクラス、両方の出力層で損失を計算する場合
+            '''
             loss += output.loss(layer.mulv, y[i])
-            c_i = np.argmax(self.class_dist[y[i]])
-            loss += output.loss(layer.mulq, c_i) + output.loss()
+            loss += class_output.loss(layer.mulq, self.class_dist[y[i]])
+            '''
         return loss / float(len(y))
 
     def calculate_total_loss(self, X, Y):
@@ -95,8 +105,13 @@ class ClassModel:
         prev_s_t = np.zeros(self.hidden_dim)
         diff_s = np.zeros(self.hidden_dim)
         for t in range(0, T):
-            dmulv = output.diff(layers[t].mulv, y[t])
-            dmulq = class_output.diff(np.array(self.class_dist))
+            # dmulvの計算はこれでいいのか
+            # 該当するノードのみ誤差を伝搬させる必要がある
+            
+            #dmulv = output.diff(layers[t].mulv, y[t])
+            word_list = self.word_list[np.argmax(self.class_dist[y[t]])] # y[t]と同じクラスの単語リスト
+            dmulv = output.sub_diff(layers[t].mulv, y[t], word_list)
+            dmulq = class_output.diff(layers[t].mulq, self.class_dist[y[t]])
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq)
@@ -145,7 +160,7 @@ class ClassModel:
                 sys.stdout.flush()
 
                 if batch_size <= 1:
-                    dU,dW,dV,dQ = self.sgd_step(X[i],Y[i],learning_rate)
+                    dU,dW,dV,dQ = self.sgd_step((X[i],Y[i],learning_rate))
                     self.U -= learning_rate * dU
                     self.W -= learning_rate * dW
                     self.V -= learning_rate * dV

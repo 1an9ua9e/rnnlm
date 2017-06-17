@@ -12,6 +12,8 @@ parser.add_argument("--class_dim")
 parser.add_argument("--class_type")
 parser.add_argument("--batch_size")
 parser.add_argument("--epoch")
+parser.add_argument("--sort")
+parser.add_argument("--data_size")
 args = parser.parse_args()
 '''
 word_dim = args.word_dim
@@ -22,19 +24,20 @@ batch_size =
 '''
 
 if int(args.class_dim) > 0:
-    X_train, y_train, index_to_class_dist, class_to_word_list = getSentenceData('data/reddit-comments-2015-08.csv', int(args.word_dim), int(args.class_dim))
+    X_train, y_train, index_to_class_dist, class_to_word_list = getSentenceData('data/reddit-comments-2015-08.csv', int(args.word_dim), int(args.class_dim),sort=bool(int(args.sort)))
 else:
-    X_train, y_train = getSentenceData('data/reddit-comments-2015-08.csv', int(args.word_dim), int(args.class_dim))
+    X_train, y_train = getSentenceData('data/reddit-comments-2015-08.csv', int(args.word_dim), int(args.class_dim),sort=bool(int(args.sort)))
 
 np.random.seed(10)
 start = time.time()
 
 if int(args.class_dim) > 0:
-    class_rnn = ClassModel(int(args.word_dim), int(args.hidden_dim), int(args.class_dim), index_to_class_dist, class_to_word_list)
-    losses = class_rnn.train(X_train[:10000], y_train[:10000], learning_rate=0.005, nepoch=int(args.epoch), evaluate_loss_after=1,batch_size=int(args.batch_size))
+    class_rnn = ClassModel(int(args.word_dim), int(args.hidden_dim), class_dim=int(args.class_dim),
+                           index_to_class_dist=index_to_class_dist, class_to_word_list=class_to_word_list)
+    losses = class_rnn.train(X_train[:int(args.data_size)], y_train[:int(args.data_size)], learning_rate=0.005, nepoch=int(args.epoch), evaluate_loss_after=1,batch_size=int(args.batch_size))
 else:
     rnn = Model(int(args.word_dim), int(args.hidden_dim))
-    losses = rnn.train(X_train[:10000], y_train[:10000], learning_rate=0.005, nepoch=int(args.epoch), evaluate_loss_after=1,batch_size=int(args.batch_size))
+    losses = rnn.train(X_train[:int(args.data_size)], y_train[:int(args.data_size)], learning_rate=0.005, nepoch=int(args.epoch), evaluate_loss_after=1,batch_size=int(args.batch_size))
 
 print("training time : %.2f[s]"%(time.time() - start))
 
