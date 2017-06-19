@@ -147,12 +147,14 @@ class ClassModel:
         losses = []
         for epoch in range(nepoch):
             # For each training example...
+            num_examples_seen = 0
             data_size = len(Y)
             max_batch_loop = math.floor(data_size / batch_size)
             if(batch_size == 1):
                 print("training mode : online learning")
             else:
                 print("training mode : minibatch learning (batch size %d)"%batch_size)
+                
             for i in range(max_batch_loop):
                 # online learning
                 num_examples_seen += batch_size
