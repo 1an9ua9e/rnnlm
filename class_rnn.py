@@ -30,7 +30,7 @@ class ClassModel:
         x is one single data, and a batch of data
         for example x = [0, 179, 341, 416], then its y = [179, 341, 416, 1]
     '''
-    def forward_propagation(self, x):
+    def forward_propagation(self, x, y=[]):
         # The total number of time steps
         T = len(x)
         layers = []
@@ -40,7 +40,15 @@ class ClassModel:
             layer = ClassRNNLayer(self.word_list)
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            layer.forward(input, prev_s, self.U, self.W, self.V,self.Q)
+            
+            if y==[]:
+                # 学習やテストに関係ない順伝搬計算の場合
+                layer.forward(input, prev_s, self.U, self.W, self.V, self.Q)
+            else:
+                # time step tにおける望ましい出力y[t]と同じクラスに属する単語
+                # について、順伝搬の計算を行う必要がある。したがって
+                # forward計算に教師データを渡さなくてはならない。
+                layer.forward(input, prev_s, self.U, self.W, self.V, self.Q, self.class_dist[y[t]])
             prev_s = layer.s
             layers.append(layer)
         return layers
@@ -69,14 +77,17 @@ class ClassModel:
         assert len(x) == len(y)
         output = Softmax()
         class_output = ClassSoftmax()
-        layers = self.forward_propagation(x)
+        layers = self.forward_propagation(x, y)
         loss = 0.0
-        for i, layer in enumerate(layers):
+        for t, layer in enumerate(layers):
             # 単語の出力の損失だけを計算する場合
             # update_loss = - log{ p(w_j|c(w_j),s) * p(c(w_j)|s) }
-            c_j = np.argmax(self.class_dist[y[i]])
-            loss += output.loss(layer.mulq, c_j)
-            loss += output.sub_loss(layer.mulv, y[i], self.word_list[c_j], c_j)
+            c_j = np.argmax(self.class_dist[y[t]])
+            if y[t] in self.word_list[c_j]:
+                loss += output.loss(layer.mulq, c_j)
+                loss += output.sub_loss(layer.mulv, y[t], self.word_list[c_j], c_j)
+            else:
+                loss += class_output.uni_loss(layer.mulq, self.word_dim, self.word_list[c_j], c_j)
             
             # 単語とクラス、両方の出力層で損失を計算する場合
             '''
@@ -95,7 +106,7 @@ class ClassModel:
         assert len(x) == len(y)
         output = Softmax()
         class_output = ClassSoftmax()
-        layers = self.forward_propagation(x)
+        layers = self.forward_propagation(x, y)
         dU = np.zeros(self.U.shape)
         dV = np.zeros(self.V.shape)
         dW = np.zeros(self.W.shape)
@@ -114,7 +125,7 @@ class ClassModel:
             dmulq = class_output.diff(layers[t].mulq, self.class_dist[y[t]])
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq)
+            dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq, self.class_dist[y[t]])
             prev_s_t = layers[t].s
             dmulv = np.zeros(self.word_dim)
             dmulq = np.zeros(self.class_dim)
@@ -122,7 +133,7 @@ class ClassModel:
                 input = np.zeros(self.word_dim)
                 input[x[i]] = 1
                 prev_s_i = np.zeros(self.hidden_dim) if i == 0 else layers[i-1].s
-                dprev_s, dU_i, dW_i, dV_i, dQ_i = layers[i].backward(input, prev_s_i, self.U, self.W, self.V, self.Q, dprev_s, dmulv, dmulq)
+                dprev_s, dU_i, dW_i, dV_i, dQ_i = layers[i].backward(input, prev_s_i, self.U, self.W, self.V, self.Q, dprev_s, dmulv, dmulq, self.class_dist[y[t]])
                 dU_t += dU_i
                 dW_t += dW_i
             dV += dV_t
@@ -154,8 +165,10 @@ class ClassModel:
                 print("training mode : online learning")
             else:
                 print("training mode : minibatch learning (batch size %d)"%batch_size)
-                
+            my_count = 0
             for i in range(max_batch_loop):
+                my_count += 1
+                
                 # online learning
                 num_examples_seen += batch_size
                 sys.stdout.write("\r%s / %s"%(num_examples_seen,data_size))
@@ -167,6 +180,8 @@ class ClassModel:
                     self.W -= learning_rate * dW
                     self.V -= learning_rate * dV
                     self.Q -= learning_rate * dQ
+                    if my_count % 10 == 0:
+                        print("loss : %f"%self.calculate_total_loss(X,Y))
                 # minibatch learning
                 else:
                     data_list = []

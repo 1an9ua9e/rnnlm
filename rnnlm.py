@@ -34,7 +34,7 @@ start = time.time()
 if int(args.class_dim) > 0:
     class_rnn = ClassModel(int(args.word_dim), int(args.hidden_dim), class_dim=int(args.class_dim),
                            index_to_class_dist=index_to_class_dist, class_to_word_list=class_to_word_list)
-    losses = class_rnn.train(X_train[:int(args.data_size)], y_train[:int(args.data_size)], learning_rate=0.005, nepoch=int(args.epoch), evaluate_loss_after=1,batch_size=int(args.batch_size))
+    losses = class_rnn.train(X_train[:int(args.data_size)], y_train[:int(args.data_size)],learning_rate=0.005, nepoch=int(args.epoch), evaluate_loss_after=1,batch_size=int(args.batch_size))
 else:
     rnn = Model(int(args.word_dim), int(args.hidden_dim))
     losses = rnn.train(X_train[:int(args.data_size)], y_train[:int(args.data_size)], learning_rate=0.005, nepoch=int(args.epoch), evaluate_loss_after=1,batch_size=int(args.batch_size))

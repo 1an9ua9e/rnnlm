@@ -16,6 +16,7 @@ class Softmax:
             sum += exp_scores[w]
         for w in l:
             exp_scores[w] /= sum
+            
         return exp_scores
     
     def loss(self, x, y):
@@ -73,6 +74,11 @@ class ClassSoftmax:
     def loss(self, x, c):
         probs = self.predict(x)
         return -np.sum(c * np.log(probs))
+
+    def uni_loss(self, x, v_size, word_list, class_id):
+        probs = self.predict(x)
+        p = (1 - probs[class_id]) / (v_size - len(word_list))
+        return -np.log(p)
 
     # 通常のsoftmax関数では、予測に対する正解データが1-hot vectorである
     # class softmax関数では、正解データ（この場合はクラスの出現分布）

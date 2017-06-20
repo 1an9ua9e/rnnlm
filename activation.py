@@ -15,3 +15,11 @@ class Tanh:
     def backward(self, x, top_diff):
         output = self.forward(x)
         return (1.0 - np.square(output)) * top_diff
+
+class ReLU:
+    def forward(self, x):
+        return x
+    
+    def backward(self, x):
+        return x
+        
