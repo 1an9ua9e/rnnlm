@@ -168,6 +168,7 @@ class GRUModel:
                 losses.append((num_examples_seen, loss))
                 time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (time, num_examples_seen, epoch, loss))
+                print("Perplexity : %.2f"%2**loss)
                 # Adjust the learning rate if loss increases
                 if len(losses) > 1 and losses[-1][1] > losses[-2][1]:
                     learning_rate = learning_rate * 0.5
