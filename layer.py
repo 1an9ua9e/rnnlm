@@ -1,10 +1,13 @@
-from activation import Tanh
-from gate import AddGate, MultiplyGate
+from activation import Tanh, Sigmoid, Inverse
+from gate import AddGate, MultiplyGate, HadamardGate
 import numpy as np
 
 mulGate = MultiplyGate()
 addGate = AddGate()
-activation = Tanh()
+hadGate = HadamardGate()
+tanh = Tanh()
+sigmoid = Sigmoid()
+inv = Inverse()
 
 class RNNLayer:
     def forward(self, x, prev_s, U, W, V):
@@ -24,11 +27,67 @@ class RNNLayer:
         dU, dx = mulGate.backward(U, x, dmulu)
         return (dprev_s, dU, dW, dV)
 
+class GRULayer:
+    def forward(self, x, prev_s, U_z, W_z, U_r, W_r, U_u, W_u, V):
+        self.mul_U_z = mulGate.forward(U_z, x)
+        self.mul_W_z = mulGate.forward(W_z, prev_s)
+        self.mul_U_r = mulGate.forward(U_r, x)
+        self.mul_W_r = mulGate.forward(W_r, prev_s)
+
+        self.add_z = addGate.forward(self.mul_U_z, self.mul_W_z)
+        self.add_r = addGate.forward(self.mul_U_r, self.mul_W_r)
+
+        self.z = sigmoid.forward(self.add_z)
+        self.r = sigmoid.forward(self.add_r)
+        self.inv_z = inv.forward(self.z)
+        
+        self.mul_U_u = mulGate.forward(U_u, x)
+        self.had_r_s = hadGate.forward(self.r, prev_s)
+        self.mul_W_u = mulGate.forward(W_u, self.had_r_s)
+
+        self.add_u = addGate.forward(self.mul_U_u, self.mul_W_u)
+        self.u = tanh.forward(self.add_u)
+        
+        self.prev_update = hadGate.forward(self.z, prev_s)
+        self.new_update = hadGate.forward(self.inv_z, self.u)
+        self.s = addGate.forward(self.prev_update, self.new_update)
+        self.mul_V = mulGate.forward(V, self.s)
+
+    def backward(self, x, prev_s, U_z, W_z, U_r, W_r, U_u, W_u, V, diff_s, dmul_V):
+        
+        self.forward(x, prev_s, U_z, W_z, U_r, W_r, U_u, W_u, V)
+        dV, dsv = mulGate.backward(V, self.s, dmul_V)
+        ds = dsv + diff_s
+        dprev_update, dnew_update = addGate.backward(self.prev_update, self.new_update, ds)
+        dz, dprev_s_ = hadGate.backward(self.z, prev_s, dprev_update)
+        dprev_s = dprev_s_
+        dinv_z, du = hadGate.backward(self.inv_z, self.u, dnew_update)
+        dz += inv.backward(dinv_z)
+        dadd_z = sigmoid.backward(self.z ,dz)
+        dmul_U_z, dmul_W_z = addGate.backward(self.mul_U_z, self.mul_W_z, dadd_z)
+        dU_z, dx_ = mulGate.backward(U_z, x, dmul_U_z)
+        dx = dx_
+        dW_z, dprev_s_ = mulGate.backward(W_z, prev_s, dmul_W_z)
+        dprev_s += dprev_s_
+        dadd_u = tanh.backward(self.u, du)
+        dmul_U_u, dmul_W_u = addGate.backward(self.mul_U_u, self.mul_W_u, dadd_u)
+        dU_u, dx_ = mulGate.backward(U_u, x, dmul_U_u)
+        dx += dx_
+        dW_u, dhad_r_s = mulGate.backward(W_u, self.had_r_s, dmul_W_u)
+        dr, dprev_s_ = hadGate.backward(self.r, prev_s, dhad_r_s)
+        dprev_s += dprev_s_
+        dadd_r = sigmoid.backward(self.r, dr)
+        dmul_U_r, dmul_W_r = addGate.backward(self.mul_U_r, self.mul_W_r, dadd_r)
+        dU_r, dx_ = mulGate.backward(U_r, x, dmul_U_r)
+        dx += dx_
+        dW_r, dprev_s_ = mulGate.backward(W_r, prev_s, dmul_W_r)
+        dprev_s += dprev_s_
+        return (dprev_s, dU_z, dW_z, dU_r, dW_r, dU_u, dW_u, dV)
+
     
 class ClassRNNLayer:
     def __init__(self, word_list):
-        self.word_list = word_list
-            
+        self.word_list = word_list            
     def forward(self, x ,prev_s, U, W, V, Q, dist=[]):
         self.mulu = mulGate.forward(U, x)
         self.mulw = mulGate.forward(W, prev_s)

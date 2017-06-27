@@ -23,3 +23,9 @@ class ReLU:
     def backward(self, x):
         return x
         
+class Inverse:
+    def forward(self, x):
+        return np.ones(len(x)) - x
+    
+    def backward(self, top_diff):
+        return - top_diff

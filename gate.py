@@ -31,3 +31,14 @@ class AddGate:
         dx1 = dz * np.ones_like(x1)
         dx2 = dz * np.ones_like(x2)
         return dx1, dx2
+    
+# hadamard productを計算するゲート
+class HadamardGate:
+    def forward(self, x1, x2):
+        return x1 * x2
+
+        return
+    def backward(self, x1, x2, dz):
+        dx1 = dz * x2
+        dx2 = dz * x1
+        return dx1, dx2

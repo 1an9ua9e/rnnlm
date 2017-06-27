@@ -3,7 +3,7 @@ import os
 import math
 import numpy as np
 import sys
-from layer import RNNLayer
+from layer import RNNLayer, GRULayer
 from output import Softmax
 import multiprocessing as mp
 import itertools as itr
@@ -14,8 +14,12 @@ class GRUModel:
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.bptt_truncate = bptt_truncate
-        self.U = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
-        self.W = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
+        self.U_z = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
+        self.W_z = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
+        self.U_r = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
+        self.W_r = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
+        self.U_u = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
+        self.W_u = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
 
     '''
@@ -30,10 +34,10 @@ class GRUModel:
         prev_s = np.zeros(self.hidden_dim)
         # For each time step...
         for t in range(T):
-            layer = RNNLayer()
+            layer = GRULayer()
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            layer.forward(input, prev_s, self.U, self.W, self.V)
+            layer.forward(input, prev_s, self.U_z, self.W_z, self.U_r, self.W_r, self.U_u, self.W_u, self.V)
             prev_s = layer.s
             layers.append(layer)
         return layers
@@ -42,7 +46,7 @@ class GRUModel:
     def predict(self, x):
         output = Softmax()
         layers = self.forward_propagation(x)
-        return [np.argmax(output.predict(layer.mulv)) for layer in layers]
+        return [np.argmax(output.predict(layer.mul_V)) for layer in layers]
 
     def calculate_loss(self, x, y):
         assert len(x) == len(y)
@@ -50,7 +54,7 @@ class GRUModel:
         layers = self.forward_propagation(x)
         loss = 0.0
         for i, layer in enumerate(layers):
-            loss += output.loss(layer.mulv, y[i])
+            loss += output.loss(layer.mul_V, y[i])
         return loss / float(len(y))
 
     def calculate_total_loss(self, X, Y):
@@ -63,42 +67,57 @@ class GRUModel:
         assert len(x) == len(y)
         output = Softmax()
         layers = self.forward_propagation(x)
-        dU = np.zeros(self.U.shape)
+        
+        dU_z = np.zeros(self.U_z.shape)
+        dW_z = np.zeros(self.W_z.shape)
+        dU_r = np.zeros(self.U_r.shape)
+        dW_r = np.zeros(self.W_r.shape)
+        dU_u = np.zeros(self.U_u.shape)
+        dW_u = np.zeros(self.W_u.shape)
         dV = np.zeros(self.V.shape)
-        dW = np.zeros(self.W.shape)
 
         T = len(layers)
         prev_s_t = np.zeros(self.hidden_dim)
         diff_s = np.zeros(self.hidden_dim)
         for t in range(0, T):
-            dmulv = output.diff(layers[t].mulv, y[t])
+            dmul_V = output.diff(layers[t].mul_V, y[t])
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            dprev_s, dU_t, dW_t, dV_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, diff_s, dmulv)
+            dprev_s, dU_z_t, dW_z_t,dU_r_t, dW_r_t,dU_u_t, dW_u_t, dV_t = layers[t].backward(
+                input, prev_s_t, self.U_z, self.W_z, self.U_r, self.W_r, self.U_u, self.W_u, self.V, diff_s, dmul_V)
             prev_s_t = layers[t].s
-            dmulv = np.zeros(self.word_dim)
+            dmul_V = np.zeros(self.word_dim)
             for i in range(t-1, max(-1, t-self.bptt_truncate-1), -1):
                 input = np.zeros(self.word_dim)
                 input[x[i]] = 1
                 prev_s_i = np.zeros(self.hidden_dim) if i == 0 else layers[i-1].s
-                dprev_s, dU_i, dW_i, dV_i = layers[i].backward(input, prev_s_i, self.U, self.W, self.V, dprev_s, dmulv)
-                dU_t += dU_i
-                dW_t += dW_i
+                dprev_s, dU_z_i, dW_z_i,dU_r_i, dW_r_i,dU_u_i, dW_u_i, dV_i = layers[i].backward(
+                    input, prev_s_i, self.U_z, self.W_z, self.U_r, self.W_r, self.U_u, self.W_u, self.V, dprev_s, dmul_V)
+                dU_z_t += dU_z_i
+                dW_z_t += dW_z_i
+                dU_r_t += dU_r_i
+                dW_r_t += dW_r_i
+                dU_u_t += dU_u_i
+                dW_u_t += dW_u_i
+            dU_z += dU_z_t
+            dW_z += dW_z_t
+            dU_r += dU_r_t
+            dW_r += dW_r_t
+            dU_u += dU_u_t
+            dW_u += dW_u_t
             dV += dV_t
-            dU += dU_t
-            dW += dW_t
-        return (dU, dW, dV)
+        return (dU_z, dW_z, dU_r, dW_r, dU_u, dW_u, dV)
 
     def sgd_step(self, data):
         x = data[0]
         y = data[1]
         learning_rate = data[2]
-        dU, dW, dV = self.bptt(x, y)
+        dU_z,dW_z,dU_r,dW_r,dU_u,dW_u,dV = self.bptt(x, y)
         #print(os.getpid())
         #self.U -= learning_rate * dU
         #self.V -= learning_rate * dV
         #self.W -= learning_rate * dW
-        return np.array([dU,dW,dV])
+        return np.array([dU_z,dW_z,dU_r,dW_r,dU_u,dW_u,dV])
 
     def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5,batch_size=1):
         num_examples_seen = 0
@@ -118,9 +137,13 @@ class GRUModel:
                 sys.stdout.flush()
 
                 if batch_size <= 1:
-                    dU,dW,dV = self.sgd_step((X[i],Y[i],learning_rate))
-                    self.U -= learning_rate * dU
-                    self.W -= learning_rate * dW
+                    dU_z,dW_z,dU_r,dW_r,dU_u,dW_u,dV = self.sgd_step((X[i],Y[i],learning_rate))
+                    self.U_z -= learning_rate * dU_z
+                    self.W_z -= learning_rate * dW_z
+                    self.U_r -= learning_rate * dU_r
+                    self.W_r -= learning_rate * dW_r
+                    self.U_u -= learning_rate * dU_u
+                    self.W_u -= learning_rate * dW_u
                     self.V -= learning_rate * dV
                 # minibatch learning
                 else:
@@ -130,9 +153,13 @@ class GRUModel:
                         data_list.append([X[index],Y[index],learning_rate])
                     pool = mp.Pool(batch_size)
                     args = zip(itr.repeat(self),itr.repeat('sgd_step'),data_list)
-                    dU,dW,dV = np.sum(np.array(pool.map(utils.tomap,args)),axis=0)
-                    self.U -= learning_rate * dU
-                    self.W -= learning_rate * dW
+                    dU_z,dW_z,dU_r,dW_r,dU_u,dW_u,dV = np.sum(np.array(pool.map(utils.tomap,args)),axis=0)
+                    self.U_z -= learning_rate * dU_z
+                    self.W_z -= learning_rate * dW_z
+                    self.U_r -= learning_rate * dU_r
+                    self.W_r -= learning_rate * dW_r
+                    self.U_u -= learning_rate * dU_u
+                    self.W_u -= learning_rate * dW_u
                     self.V -= learning_rate * dV
                     pool.close()
                     
