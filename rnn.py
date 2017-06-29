@@ -146,5 +146,6 @@ class Model:
                     learning_rate = learning_rate * 0.5
                     print("Setting learning rate to %f" % learning_rate)
                 sys.stdout.flush()
+                print("Perplexity : %.2f"%loss)
 
         return losses

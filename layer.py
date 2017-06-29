@@ -1,6 +1,7 @@
 from activation import Tanh, Sigmoid, Inverse
 from gate import AddGate, MultiplyGate, HadamardGate
 import numpy as np
+import sys
 
 mulGate = MultiplyGate()
 addGate = AddGate()
@@ -54,13 +55,13 @@ class GRULayer:
         self.mul_V = mulGate.forward(V, self.s)
 
     def backward(self, x, prev_s, U_z, W_z, U_r, W_r, U_u, W_u, V, diff_s, dmul_V):
-        
         self.forward(x, prev_s, U_z, W_z, U_r, W_r, U_u, W_u, V)
         dV, dsv = mulGate.backward(V, self.s, dmul_V)
         ds = dsv + diff_s
         dprev_update, dnew_update = addGate.backward(self.prev_update, self.new_update, ds)
         dz, dprev_s_ = hadGate.backward(self.z, prev_s, dprev_update)
         dprev_s = dprev_s_
+        # dinv_zの値がぶっとぶ。 self.u か dnew_updateに問題あり？
         dinv_z, du = hadGate.backward(self.inv_z, self.u, dnew_update)
         dz += inv.backward(dinv_z)
         dadd_z = sigmoid.backward(self.z ,dz)
@@ -69,7 +70,7 @@ class GRULayer:
         dx = dx_
         dW_z, dprev_s_ = mulGate.backward(W_z, prev_s, dmul_W_z)
         dprev_s += dprev_s_
-        dadd_u = tanh.backward(self.u, du)
+        dadd_u = tanh.backward(self.add_u, du)
         dmul_U_u, dmul_W_u = addGate.backward(self.mul_U_u, self.mul_W_u, dadd_u)
         dU_u, dx_ = mulGate.backward(U_u, x, dmul_U_u)
         dx += dx_

@@ -37,7 +37,6 @@ class HadamardGate:
     def forward(self, x1, x2):
         return x1 * x2
 
-        return
     def backward(self, x1, x2, dz):
         dx1 = dz * x2
         dx2 = dz * x1

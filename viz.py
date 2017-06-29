@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib.patches as mpatches
 from matplotlib.font_manager import FontProperties
 
-plot_name = "rnn-vs-gru"
+plot_name = "rnn-vs-gru-s5000-h50-b15"
 
 #タイトル等で日本語を使えるようにフォントを指定
 fp = FontProperties(fname=r'/usr/share/fonts/truetype/fonts-japanese-gothic.ttf')
@@ -17,8 +17,8 @@ blue_patch = mpatches.Patch(color='blue',label=u'RNN')
 red_patch = mpatches.Patch(color='red',label=u'GRU')
 sns.plt.legend(handles=[blue_patch,red_patch],prop=fp)
 
-data1 = pd.read_csv("rnn-s1000-h50-online.csv")
-data2 = pd.read_csv("gru-s1000-h50-online.csv")
+data1 = pd.read_csv("rnn-s5000-h50-b15.csv")
+data2 = pd.read_csv("gru-s5000-h50-b15.csv")
 sns.pointplot(
     x='epoch',
     y='PPL',
@@ -31,7 +31,7 @@ sns.pointplot(
     color='red')
 
 sns.plt.title(u"RNNとGRUの比較、言語モデル実験",fontproperties=fp)
-sns.plt.ylim(0, 15)
+sns.plt.ylim(0, 140)
 sns.plt.xlabel('epoch')
 sns.plt.ylabel('perplexity')
 sns.plt.savefig(plot_name + ".png")
