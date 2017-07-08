@@ -52,6 +52,10 @@ class Softmax:
         probs = self.rest_predict(x, l)
         probs[y] -= 1.0
         return probs
+    # NCEでは２値分類のためのの損失関数を用いる。
+    def diff_nce(self, x, y, k):
+        
+        return 0.0
 
 class ClassSoftmax:
     def predict(self, x):

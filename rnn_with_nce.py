@@ -8,21 +8,39 @@ from output import Softmax
 import multiprocessing as mp
 import itertools as itr
 import utils
+from numpy.random import *
 
-class Model:
-    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4):
+class RNN_NCE:
+    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4, unigram):
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.bptt_truncate = bptt_truncate
+        self.unigram = unigram
         self.U = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
         self.W = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
-
+        self.Z = 1.0 # NCEで推定すべき分配関数
+        self.k = 10 # ニセの分布から生成する単語の個数
     '''
         forward propagation (predicting word probabilities)
         x is one single data, and a batch of data
         for example x = [0, 179, 341, 416], then its y = [179, 341, 416, 1]
     '''
+    # 単語のunigram確率を計算する。
+    def q(x):
+        return self.unigram[x]
+    
+    # コーパスから構築したunigramの情報に基づき、単語を１つサンプルする。
+    def generate_from_q(self):
+        r = rand()
+        threshold = 0.0
+        for (i,p) in enumerate(self.unigram):
+            threshold += p
+            if r <= threshold:
+                return i
+                
+        return 0
+    
     def forward_propagation(self, x):
         # The total number of time steps
         T = len(x)
@@ -58,7 +76,10 @@ class Model:
         for i in range(len(Y)):
             loss += self.calculate_loss(X[i], Y[i])
         return loss / float(len(Y))
-
+    
+    def true_prob(self, x_t, o_j):
+        return exp(o_j) / (exp(o_j) + self.k * self.q(x_t))
+    
     def bptt(self, x, y):
         assert len(x) == len(y)
         output = Softmax()
@@ -71,7 +92,14 @@ class Model:
         prev_s_t = np.zeros(self.hidden_dim)
         diff_s = np.zeros(self.hidden_dim)
         for t in range(0, T):
-            dmulv = output.diff(layers[t].mulv, y[t])
+            # 学習時のみNCEを用いるプログラムではdmulvの計算を書き換えるだけで良い。
+            dmulv = np.zeros(self.word_dim)
+            dmulv[y[t]] = 1 + true_prob(x, o[y[t]])
+            for i in range(self.k):
+                qx = generate_from_q()
+                qo = 
+                dmulv[y[t]] -= true_prob(qx, qo[y[t]]) / (self.k * q(qx))
+
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             dprev_s, dU_t, dW_t, dV_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, diff_s, dmulv)
@@ -100,7 +128,7 @@ class Model:
         #self.W -= learning_rate * dW
         return np.array([dU,dW,dV])
 
-    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5,batch_size=1):
+    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5, batch_size=1):
         num_examples_seen = 0
         losses = []
         for epoch in range(nepoch):

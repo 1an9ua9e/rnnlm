@@ -31,7 +31,7 @@ if args.class_dim > 0:
     X_train, y_train, index_to_class_dist, class_to_word_list = getSentenceData(
         args.training_data, args.word_dim, args.class_dim,sort=args.sort)
 else:
-    X_train, y_train = getSentenceData(args.training_data, args.word_dim, args.class_dim, sort=args.sort)
+    X_train, y_train, unigram = getSentenceData(args.training_data, args.word_dim, args.class_dim, sort=args.sort)
 
 np.random.seed(10)
 
@@ -49,6 +49,10 @@ elif args.network == "RNN":
 
 elif args.network == "GRU":
     rnn = GRUModel(args.word_dim, args.hidden_dim)
+    losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
+                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
+elif args.network == "RNNwithNCE":
+    rnn = RNN_NCE(args.word_dim, args.hidden_dim, unigram=unigram)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
 

@@ -68,6 +68,15 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
     icount = np.array([x[1] for x in V])
     num_tokens = np.sum(icount)
     '''
+    # NCEで使うunigramを計算する
+    total_token = 0
+    unigram = np.zeros(vocabulary_size)
+    for (i,x) in enumerate(vocab):
+        unigram[i] = x[1]
+        total_token += x[1]
+    unigram = unigram / float(total_token)
+
+    
     index_to_word = [x[0] for x in vocab]
     index_to_word.append(unknown_token)
     word_to_index = dict([(w,i) for i,w in enumerate(index_to_word)])
@@ -171,7 +180,7 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
     if class_dim > 0:
         return X_train, y_train, index_to_class_dist, class_to_word_list
     else:
-        return X_train, y_train
+        return X_train, y_train, unigram
 
 if __name__ == '__main__':
-    X_train, y_train = getSentenceData('data/reddit-comments-2015-08.csv')
+    X_train, y_train, unigram = getSentenceData('data/reddit-comments-2015-08.csv')
