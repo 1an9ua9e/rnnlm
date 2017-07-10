@@ -29,12 +29,12 @@ class RNNLayer:
         return (dprev_s, dU, dW, dV)
 # 必要ないクラス？？？
 class RNN_NCE_Layer:
-    def forward(self, x, prev_s, U, W, V):
+    def forward(self, x, prev_s, U, W, V, y_t):
         self.mulu = mulGate.forward(U, x)
         self.mulw = mulGate.forward(W, prev_s)
         self.add = addGate.forward(self.mulw, self.mulu)
         self.s = tanh.forward(self.add)
-        self.mulv = mulGate.forward(V, self.s)
+        self.mulv_y_t = mulGate.forward(V[y_t], self.s)
 
     def backward(self, x, prev_s, U, W, V, diff_s, dmulv):
         self.forward(x, prev_s, U, W, V)

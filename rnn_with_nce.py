@@ -11,7 +11,7 @@ import utils
 from numpy.random import *
 
 class RNN_NCE:
-    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4, unigram):
+    def __init__(self, unigram, word_dim, hidden_dim=100, bptt_truncate=4):
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.bptt_truncate = bptt_truncate
@@ -27,7 +27,7 @@ class RNN_NCE:
         for example x = [0, 179, 341, 416], then its y = [179, 341, 416, 1]
     '''
     # 単語のunigram確率を計算する。
-    def q(x):
+    def q(self, x):
         return self.unigram[x]
     
     # コーパスから構築したunigramの情報に基づき、単語を１つサンプルする。
@@ -78,7 +78,7 @@ class RNN_NCE:
         return loss / float(len(Y))
     
     def true_prob(self, x_t, o_j):
-        return exp(o_j) / (exp(o_j) + self.k * self.q(x_t))
+        return np.exp(o_j) / (np.exp(o_j) + self.k * self.q(x_t))
     
     def bptt(self, x, y):
         assert len(x) == len(y)
@@ -94,11 +94,14 @@ class RNN_NCE:
         for t in range(0, T):
             # 学習時のみNCEを用いるプログラムではdmulvの計算を書き換えるだけで良い。
             dmulv = np.zeros(self.word_dim)
-            dmulv[y[t]] = 1 + true_prob(x, o[y[t]])
+            dmulv[y[t]] = 1 + self.true_prob(x, layers[t].mulv[y[t]])
             for i in range(self.k):
+                qlayer = RNN_NCE_Layer()
                 qx = generate_from_q()
-                qo = 
-                dmulv[y[t]] -= true_prob(qx, qo[y[t]]) / (self.k * q(qx))
+                ps = np.zeros(self.hidden_dim) if t==0 else layers[t-1].s
+                qlayer.forward(qx, ps, self.U, self.W, self.V, y[t])
+                qo_y_t = qlayer.mulv_y_t
+                dmulv[y[t]] -= true_prob(qx, qo_y_t) / (self.k * q(qx))
 
             input = np.zeros(self.word_dim)
             input[x[t]] = 1

@@ -4,6 +4,7 @@ from preprocessing import getSentenceData
 from rnn import Model
 from class_rnn import ClassModel
 from gru import GRUModel
+from rnn_with_nce import RNN_NCE
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -52,7 +53,7 @@ elif args.network == "GRU":
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
 elif args.network == "RNNwithNCE":
-    rnn = RNN_NCE(args.word_dim, args.hidden_dim, unigram=unigram)
+    rnn = RNN_NCE(unigram, args.word_dim, args.hidden_dim)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
 
