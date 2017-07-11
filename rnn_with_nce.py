@@ -4,6 +4,7 @@ import math
 import numpy as np
 import sys
 from layer import RNNLayer
+from layer import RNN_NCE_Layer
 from output import Softmax
 import multiprocessing as mp
 import itertools as itr
@@ -20,7 +21,7 @@ class RNN_NCE:
         self.W = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
         self.Z = 1.0 # NCEで推定すべき分配関数
-        self.k = 10 # ニセの分布から生成する単語の個数
+        self.k = 30 # ニセの分布から生成する単語の個数
     '''
         forward propagation (predicting word probabilities)
         x is one single data, and a batch of data
@@ -28,6 +29,7 @@ class RNN_NCE:
     '''
     # 単語のunigram確率を計算する。
     def q(self, x):
+        #return 1 / self.word_dim
         return self.unigram[x]
     
     # コーパスから構築したunigramの情報に基づき、単語を１つサンプルする。
@@ -68,6 +70,8 @@ class RNN_NCE:
         layers = self.forward_propagation(x)
         loss = 0.0
         for i, layer in enumerate(layers):
+            #loss += np.log(abs(self.Z)) - layer.mulv[y[i]]
+            #loss -= layer.mulv[y[i]]
             loss += output.loss(layer.mulv, y[i])
         return loss / float(len(y))
 
@@ -77,9 +81,24 @@ class RNN_NCE:
             loss += self.calculate_loss(X[i], Y[i])
         return loss / float(len(Y))
     
-    def true_prob(self, x_t, o_j):
-        return np.exp(o_j) / (np.exp(o_j) + self.k * self.q(x_t))
-    
+    # データが真の分布から生成されるときの確率
+    def true_prob(self, x_t, o_j, D):
+        a = 30.0
+        if D == 1:
+            if o_j > a:
+                return 1.0
+            elif o_j < -a:
+                return 0.0
+            else:
+                return np.exp(o_j) / (np.exp(o_j) + self.k * self.q(x_t)) * self.Z
+        else:
+            if o_j > a:
+                return 0.0
+            if o_j < -a:
+                return 1.0
+            else:
+                return self.k * self.q(x_t) * self.Z / (np.exp(o_j) + self.k * self.q(x_t) * self.Z)
+
     def bptt(self, x, y):
         assert len(x) == len(y)
         output = Softmax()
@@ -87,6 +106,7 @@ class RNN_NCE:
         dU = np.zeros(self.U.shape)
         dV = np.zeros(self.V.shape)
         dW = np.zeros(self.W.shape)
+        dZ = 0.0
 
         T = len(layers)
         prev_s_t = np.zeros(self.hidden_dim)
@@ -94,14 +114,21 @@ class RNN_NCE:
         for t in range(0, T):
             # 学習時のみNCEを用いるプログラムではdmulvの計算を書き換えるだけで良い。
             dmulv = np.zeros(self.word_dim)
-            dmulv[y[t]] = 1 + self.true_prob(x, layers[t].mulv[y[t]])
+            dmulv[y[t]] = self.true_prob(y[t], layers[t].mulv[y[t]], 0)
+            #dZ += -self.true_prob(y[t], layers[t].mulv[y[t]], 0) / self.Z
             for i in range(self.k):
-                qlayer = RNN_NCE_Layer()
-                qx = generate_from_q()
+                #qlayer = RNN_NCE_Layer()
+                qx = self.generate_from_q()
+                dmulv[qx] -= self.true_prob(qx, layers[t].mulv[qx], 1)
+                #dZ += self.true_prob(qx, layers[t].mulv[qx], 1) / self.Z
+                '''
+                input_word = np.zeros(self.word_dim)
+                input_word[qx] = 1
                 ps = np.zeros(self.hidden_dim) if t==0 else layers[t-1].s
-                qlayer.forward(qx, ps, self.U, self.W, self.V, y[t])
+                qlayer.forward(input_word, ps, self.U, self.W, self.V, y[t])
                 qo_y_t = qlayer.mulv_y_t
-                dmulv[y[t]] -= true_prob(qx, qo_y_t) / (self.k * q(qx))
+                dmulv[y[t]] -= self.true_prob(qx, qo_y_t) / (self.k * self.q(qx))
+                '''
 
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
@@ -118,18 +145,18 @@ class RNN_NCE:
             dV += dV_t
             dU += dU_t
             dW += dW_t
-        return (dU, dW, dV)
+        return (dU, dW, dV, dZ)
 
     def sgd_step(self, data):
         x = data[0]
         y = data[1]
         learning_rate = data[2]
-        dU, dW, dV = self.bptt(x, y)
+        dU, dW, dV, dZ = self.bptt(x, y)
         #print(os.getpid())
         #self.U -= learning_rate * dU
         #self.V -= learning_rate * dV
         #self.W -= learning_rate * dW
-        return np.array([dU,dW,dV])
+        return np.array([dU,dW,dV,dZ])
 
     def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5, batch_size=1):
         num_examples_seen = 0
@@ -149,10 +176,11 @@ class RNN_NCE:
                 sys.stdout.flush()
 
                 if batch_size <= 1:
-                    dU,dW,dV = self.sgd_step((X[i],Y[i],learning_rate))
+                    dU,dW,dV,dZ = self.sgd_step((X[i],Y[i],learning_rate))
                     self.U -= learning_rate * dU
                     self.W -= learning_rate * dW
                     self.V -= learning_rate * dV
+                    self.Z -= learning_rate * dZ
                 # minibatch learning
                 else:
                     data_list = []
@@ -161,11 +189,15 @@ class RNN_NCE:
                         data_list.append([X[index],Y[index],learning_rate])
                     pool = mp.Pool(batch_size)
                     args = zip(itr.repeat(self),itr.repeat('sgd_step'),data_list)
-                    dU,dW,dV = np.sum(np.array(pool.map(utils.tomap,args)),axis=0)
+                    dU,dW,dV,dZ = np.sum(np.array(pool.map(utils.tomap,args)),axis=0)
                     self.U -= learning_rate * dU
                     self.W -= learning_rate * dW
                     self.V -= learning_rate * dV
+                    self.Z -= learning_rate * dZ
                     pool.close()
+                loss = self.calculate_total_loss(X, Y)
+                print("\nloss : %.4f"%loss)
+
                     
             if (epoch % evaluate_loss_after == 0):
                 loss = self.calculate_total_loss(X, Y)
