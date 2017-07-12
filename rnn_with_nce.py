@@ -20,8 +20,8 @@ class RNN_NCE:
         self.U = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
         self.W = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
-        self.Z = 1.0 # NCEで推定すべき分配関数
-        self.k = 30 # ニセの分布から生成する単語の個数
+        self.Z = 10.0 # NCEで推定すべき分配関数
+        self.k = 10 # ニセの分布から生成する単語の個数
     '''
         forward propagation (predicting word probabilities)
         x is one single data, and a batch of data
@@ -70,9 +70,9 @@ class RNN_NCE:
         layers = self.forward_propagation(x)
         loss = 0.0
         for i, layer in enumerate(layers):
-            #loss += np.log(abs(self.Z)) - layer.mulv[y[i]]
+            loss += np.log(abs(self.Z)) - layer.mulv[y[i]]
             #loss -= layer.mulv[y[i]]
-            loss += output.loss(layer.mulv, y[i])
+            #loss += output.loss(layer.mulv, y[i])
         return loss / float(len(y))
 
     def calculate_total_loss(self, X, Y):
@@ -111,16 +111,20 @@ class RNN_NCE:
         T = len(layers)
         prev_s_t = np.zeros(self.hidden_dim)
         diff_s = np.zeros(self.hidden_dim)
+        #print("\nself.Z : %.4f"%self.Z)
         for t in range(0, T):
             # 学習時のみNCEを用いるプログラムではdmulvの計算を書き換えるだけで良い。
             dmulv = np.zeros(self.word_dim)
-            dmulv[y[t]] = self.true_prob(y[t], layers[t].mulv[y[t]], 0)
-            #dZ += -self.true_prob(y[t], layers[t].mulv[y[t]], 0) / self.Z
+            #pp = np.exp(layers[t].mulv[y[t]]) / self.Z
+            pp = self.Z
+            #print("\npp = %f"%pp)
+            dmulv[y[t]] = -self.true_prob(y[t], layers[t].mulv[y[t]], 0) / pp
+            dZ += self.true_prob(y[t], layers[t].mulv[y[t]], 0) / self.Z
             for i in range(self.k):
                 #qlayer = RNN_NCE_Layer()
                 qx = self.generate_from_q()
-                dmulv[qx] -= self.true_prob(qx, layers[t].mulv[qx], 1)
-                #dZ += self.true_prob(qx, layers[t].mulv[qx], 1) / self.Z
+                dmulv[qx] += self.true_prob(qx, layers[t].mulv[qx], 1)
+                dZ -= self.true_prob(qx, layers[t].mulv[qx], 1) / self.Z
                 '''
                 input_word = np.zeros(self.word_dim)
                 input_word[qx] = 1
@@ -129,7 +133,7 @@ class RNN_NCE:
                 qo_y_t = qlayer.mulv_y_t
                 dmulv[y[t]] -= self.true_prob(qx, qo_y_t) / (self.k * self.q(qx))
                 '''
-
+            #print("dZ : %.4f"%dZ)
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             dprev_s, dU_t, dW_t, dV_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, diff_s, dmulv)
@@ -195,8 +199,9 @@ class RNN_NCE:
                     self.V -= learning_rate * dV
                     self.Z -= learning_rate * dZ
                     pool.close()
-                loss = self.calculate_total_loss(X, Y)
-                print("\nloss : %.4f"%loss)
+                #loss = self.calculate_total_loss(X, Y)
+                #print("\nloss : %.4f"%loss)
+                #print("\nself.Z = %.4f"%self.Z)
 
                     
             if (epoch % evaluate_loss_after == 0):
@@ -209,6 +214,6 @@ class RNN_NCE:
                     learning_rate = learning_rate * 0.5
                     print("Setting learning rate to %f" % learning_rate)
                 sys.stdout.flush()
-                print("Perplexity : %.2f"%loss)
+                print("Perplexity : %.2f"%2.0 ** loss)
 
         return losses
