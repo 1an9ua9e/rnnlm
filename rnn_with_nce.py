@@ -43,17 +43,18 @@ class RNN_NCE:
                 
         return 0
     
-    def forward_propagation(self, x):
+    def forward_propagation(self, x, forward_list=[]):
         # The total number of time steps
         T = len(x)
         layers = []
         prev_s = np.zeros(self.hidden_dim)
         # For each time step...
         for t in range(T):
-            layer = RNNLayer()
+            layer = RNN_NCE_Layer()
+            #layer = RNNLayer()
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            layer.forward(input, prev_s, self.U, self.W, self.V)
+            layer.forward(input, prev_s, self.U, self.W, self.V, forward_list[t * self.k : t * self.k + self.k])
             prev_s = layer.s
             layers.append(layer)
         return layers
@@ -102,13 +103,19 @@ class RNN_NCE:
     def bptt(self, x, y):
         assert len(x) == len(y)
         output = Softmax()
-        layers = self.forward_propagation(x)
+        T = len(x)
+        # NCEでは順伝搬計算を部分的に行うだけでよい？
+        # forward_listで計算すべきmulvの要素を指定する
+        forward_list = []
+        for i in range(T * self.k):
+            forward_list.append(self.generate_from_q())
+        layers = self.forward_propagation(x, forward_list)
+        
         dU = np.zeros(self.U.shape)
         dV = np.zeros(self.V.shape)
         dW = np.zeros(self.W.shape)
         dZ = 0.0
 
-        T = len(layers)
         prev_s_t = np.zeros(self.hidden_dim)
         diff_s = np.zeros(self.hidden_dim)
         #print("\nself.Z : %.4f"%self.Z)
@@ -122,7 +129,8 @@ class RNN_NCE:
             dZ += self.true_prob(y[t], layers[t].mulv[y[t]], 0) / self.Z
             for i in range(self.k):
                 #qlayer = RNN_NCE_Layer()
-                qx = self.generate_from_q()
+                #qx = self.generate_from_q()
+                qx = forward_list[t * self.k + i]
                 dmulv[qx] += self.true_prob(qx, layers[t].mulv[qx], 1)
                 dZ -= self.true_prob(qx, layers[t].mulv[qx], 1) / self.Z
                 '''
@@ -136,7 +144,8 @@ class RNN_NCE:
             #print("dZ : %.4f"%dZ)
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            dprev_s, dU_t, dW_t, dV_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, diff_s, dmulv)
+            dprev_s, dU_t, dW_t, dV_t = layers[t].backward(
+                input, prev_s_t, self.U, self.W, self.V, diff_s, dmulv, forward_list[t * self.k:t * self.k + self.k])
             prev_s_t = layers[t].s
             dmulv = np.zeros(self.word_dim)
             for i in range(t-1, max(-1, t-self.bptt_truncate-1), -1):
