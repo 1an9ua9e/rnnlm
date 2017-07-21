@@ -9,7 +9,8 @@ from output import Softmax
 import multiprocessing as mp
 import itertools as itr
 import utils
-from numpy.random import *
+#from numpy.random import *
+import random
 
 class RNN_NCE:
     def __init__(self, unigram, word_dim, hidden_dim=100, bptt_truncate=4):
@@ -20,8 +21,10 @@ class RNN_NCE:
         self.U = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
         self.W = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
-        self.Z = 10.0 # NCEで推定すべき分配関数
-        self.k = 10 # ニセの分布から生成する単語の個数
+        self.Z = 30.0 # NCEで推定すべき分配関数
+        self.k = 50 # ニセの分布から生成する単語の個数
+        self.max_len = 0 # 学習データの文の最大の長さ。これに基づいて予めノイズを生成する
+        self.noise = 0
     '''
         forward propagation (predicting word probabilities)
         x is one single data, and a batch of data
@@ -34,7 +37,8 @@ class RNN_NCE:
     
     # コーパスから構築したunigramの情報に基づき、単語を１つサンプルする。
     def generate_from_q(self):
-        r = rand()
+        #r = rand()
+        r = random.random()
         threshold = 0.0
         for (i,p) in enumerate(self.unigram):
             threshold += p
@@ -65,21 +69,34 @@ class RNN_NCE:
         layers = self.forward_propagation(x)
         return [np.argmax(output.predict(layer.mulv)) for layer in layers]
 
-    def calculate_loss(self, x, y):
+    def calculate_loss(self, x, y, data_number, a="softmax"):
         assert len(x) == len(y)
         output = Softmax()
         layers = self.forward_propagation(x)
         loss = 0.0
         for i, layer in enumerate(layers):
-            loss += np.log(abs(self.Z)) - layer.mulv[y[i]]
+            if a=="nce":# NCEで予測したときの損失
+                loss += np.log(abs(self.Z)) - layer.mulv[y[i]]
+                
+            elif a=="softmax":# Softmax関数で予測した時の損失
+                loss += output.loss(layer.mulv, y[i])
+                
+            elif a=="nce-loss":# NCE用の損失関数を計算する
+                loss += - np.log(self.true_prob(y[i], layer.mulv[y[i]], 1))
+                for j in range(self.k):
+                    if self.noise[data_number] != 0 and self.noise[data_number] != []:
+                        sample_y = self.noise[data_number][i*self.k + j]
+                        #sample_y = self.noise[data_number * self.k * self.max_len + i * self.k + j]
+                        loss += - np.log(self.true_prob(sample_y, layer.mulv[sample_y], 0))
+            #loss += - layer.mulv[y[i]]
             #loss -= layer.mulv[y[i]]
             #loss += output.loss(layer.mulv, y[i])
         return loss / float(len(y))
 
-    def calculate_total_loss(self, X, Y):
+    def calculate_total_loss(self, X, Y, a):
         loss = 0.0
         for i in range(len(Y)):
-            loss += self.calculate_loss(X[i], Y[i])
+            loss += self.calculate_loss(X[i], Y[i], i, a)
         return loss / float(len(Y))
     
     # データが真の分布から生成されるときの確率
@@ -100,15 +117,17 @@ class RNN_NCE:
             else:
                 return self.k * self.q(x_t) * self.Z / (np.exp(o_j) + self.k * self.q(x_t) * self.Z)
 
-    def bptt(self, x, y):
+    def bptt(self, x, y, n):
         assert len(x) == len(y)
         output = Softmax()
         T = len(x)
         # NCEでは順伝搬計算を部分的に行うだけでよい？
         # forward_listで計算すべきmulvの要素を指定する
+        #forward_list = self.noise[n * self.k * self.max_len:(n + 1) * self.k * self.max_len]
         forward_list = []
         for i in range(T * self.k):
             forward_list.append(self.generate_from_q())
+        #self.noise[n] = forward_list
         layers = self.forward_propagation(x, forward_list)
         
         dU = np.zeros(self.U.shape)
@@ -125,7 +144,8 @@ class RNN_NCE:
             #pp = np.exp(layers[t].mulv[y[t]]) / self.Z
             pp = self.Z
             #print("\npp = %f"%pp)
-            dmulv[y[t]] = -self.true_prob(y[t], layers[t].mulv[y[t]], 0) / pp
+            #dmulv[y[t]] = -self.true_prob(y[t], layers[t].mulv[y[t]], 0) / pp
+            dmulv[y[t]] = -self.true_prob(y[t], layers[t].mulv[y[t]], 0)
             dZ += self.true_prob(y[t], layers[t].mulv[y[t]], 0) / self.Z
             for i in range(self.k):
                 #qlayer = RNN_NCE_Layer()
@@ -164,7 +184,8 @@ class RNN_NCE:
         x = data[0]
         y = data[1]
         learning_rate = data[2]
-        dU, dW, dV, dZ = self.bptt(x, y)
+        n = data[3] # dataの番号
+        dU, dW, dV, dZ = self.bptt(x, y, n)
         #print(os.getpid())
         #self.U -= learning_rate * dU
         #self.V -= learning_rate * dV
@@ -174,10 +195,26 @@ class RNN_NCE:
     def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5, batch_size=1):
         num_examples_seen = 0
         losses = []
+        data_size = len(Y)
+        max_batch_loop = math.floor(data_size / batch_size)
+        number = [i for i in range(max_batch_loop)] # データの処理の順番
+        self.max_len = len(X[-1]) # 文の最大の長さ
+        print("max length of sentence is %d"%self.max_len)
+        print()
         for epoch in range(nepoch):
+            # epochごとにノイズデータを生成する
+            '''
+            self.noise = np.zeros(self.k * self.max_len * len(X))
+            length = len(self.noise)
+            for (i,v) in enumerate(self.noise):
+                self.noise[i] = self.generate_from_q()
+                if i % 100 == 0:
+                    sys.stdout.write("\r%d / %d"%(i, length))
+                    sys.stdout.flush()
+            print("generate noise data : %d"%len(self.noise))
+            '''
+            #self.noise = [0] * data_size
             # For each training example...
-            data_size = len(Y)
-            max_batch_loop = math.floor(data_size / batch_size)
             if(batch_size == 1):
                 print("training mode : online learning")
             else:
@@ -189,7 +226,7 @@ class RNN_NCE:
                 sys.stdout.flush()
 
                 if batch_size <= 1:
-                    dU,dW,dV,dZ = self.sgd_step((X[i],Y[i],learning_rate))
+                    dU,dW,dV,dZ = self.sgd_step((X[i],Y[i],learning_rate, i))
                     self.U -= learning_rate * dU
                     self.W -= learning_rate * dW
                     self.V -= learning_rate * dV
@@ -198,8 +235,8 @@ class RNN_NCE:
                 else:
                     data_list = []
                     for j in range(batch_size):
-                        index = i * batch_size + j
-                        data_list.append([X[index],Y[index],learning_rate])
+                        index = number[i] * batch_size + j
+                        data_list.append([X[index],Y[index],learning_rate, index])
                     pool = mp.Pool(batch_size)
                     args = zip(itr.repeat(self),itr.repeat('sgd_step'),data_list)
                     dU,dW,dV,dZ = np.sum(np.array(pool.map(utils.tomap,args)),axis=0)
@@ -208,13 +245,19 @@ class RNN_NCE:
                     self.V -= learning_rate * dV
                     self.Z -= learning_rate * dZ
                     pool.close()
-                #loss = self.calculate_total_loss(X, Y)
-                #print("\nloss : %.4f"%loss)
-                #print("\nself.Z = %.4f"%self.Z)
-
+                
+                if (i+1) % 40 == 0:
+                    loss = self.calculate_total_loss(X, Y, "nce")
+                    print("\nnce loss : %.4f"%loss)
+                    loss = self.calculate_total_loss(X, Y, "softmax")
+                    print("cross entropy loss : %.4f"%loss)
+                    #print("\nloss : %.4f"%loss)
+                    print("self.Z = %.4f"%self.Z)
+                
+            np.random.shuffle(number)
                     
             if (epoch % evaluate_loss_after == 0):
-                loss = self.calculate_total_loss(X, Y)
+                loss = self.calculate_total_loss(X, Y, 1)
                 losses.append((num_examples_seen, loss))
                 time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (time, num_examples_seen, epoch, loss))
@@ -226,3 +269,8 @@ class RNN_NCE:
                 print("Perplexity : %.2f"%2.0 ** loss)
 
         return losses
+    def test(self, X, Y):
+        loss = self.calculate_total_loss(X, Y, "softmax")
+        print("Test Perplexity : %.2f" % 2**loss)
+
+                        

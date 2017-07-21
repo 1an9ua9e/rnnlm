@@ -35,7 +35,7 @@ class RNN_NCE_Layer:
         self.add = addGate.forward(self.mulw, self.mulu)
         self.s = tanh.forward(self.add)
         self.mulv = np.zeros(len(x))
-        if forward_list:
+        if forward_list != []:
             for i in forward_list:
                 self.mulv[i] = mulGate.forward(V[i], self.s)
         else:

@@ -5,6 +5,7 @@ from rnn import Model
 from class_rnn import ClassModel
 from gru import GRUModel
 from rnn_with_nce import RNN_NCE
+from rnn_with_is import IS_Model
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -54,8 +55,14 @@ elif args.network == "GRU":
     rnn = GRUModel(args.word_dim, args.hidden_dim)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
+
 elif args.network == "RNNwithNCE":
     rnn = RNN_NCE(unigram, args.word_dim, args.hidden_dim)
+    losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
+                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
+
+elif args.network == "RNNwithIS":
+    rnn = IS_Model(unigram, args.word_dim, args.hidden_dim)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
 

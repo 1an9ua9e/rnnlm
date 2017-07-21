@@ -7,6 +7,7 @@ import matplotlib
 matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 import sys
+import math
 
 def comb_sort(x):
     data_size = len(x)
@@ -31,6 +32,7 @@ def comb_sort(x):
                 sys.stdout.flush()
         if flag and gap <= 1 :
             break
+    print("")
     return x
                 
                 
@@ -69,12 +71,12 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
     num_tokens = np.sum(icount)
     '''
     # NCEで使うunigramを計算する
-    total_token = 0
+    total = 0
     unigram = np.zeros(vocabulary_size)
     for (i,x) in enumerate(vocab):
         unigram[i] = x[1]
-        total_token += x[1]
-    unigram = unigram / float(total_token)
+        total += unigram[i]
+    unigram = unigram / float(total)
 
     
     index_to_word = [x[0] for x in vocab]
