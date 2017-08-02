@@ -1,0 +1,22 @@
+import csv
+
+class Record:
+    def __init__(self, model_name, hidden_dim, word_dim, data_size, batch_size):
+        self.model_name = model_name
+        self.hidden_dim = hidden_dim
+        self.word_dim = word_dim
+        self.data_size = data_size
+        self.batch_size = batch_size
+        self.fname = model_name + "-h" + str(hidden_dim) + "-vcb" + str(word_dim) + "-data" + str(data_size) + "-b" + str(batch_size) + ".csv"
+        
+    def create(self):
+        f = open("result/" + self.fname, "a")
+        writer = csv.writer(f)
+        writer.writerow(["epoch", "PPL"])
+        f.close()
+
+    def write(self, epoch, ppl):
+        g = open("result/" + self.fname, "w")
+        writer = csv.writer(g)
+        writer.writerow([str(epoch), "{:,.2f}".format(ppl)])
+        g.close()

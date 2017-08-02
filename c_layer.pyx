@@ -1,11 +1,9 @@
 from activation import Tanh, Sigmoid, Inverse
 from gate import AddGate, MultiplyGate, HadamardGate
-from c_gate import CMultiplyGate
 import numpy as np
 import sys
 
 mulGate = MultiplyGate()
-cmulGate = CMultiplyGate()
 addGate = AddGate()
 hadGate = HadamardGate()
 tanh = Tanh()
@@ -38,7 +36,7 @@ class RNN_NCE_Layer:
         self.add = addGate.forward(self.mulw, self.mulu)
         self.s = tanh.forward(self.add)
         if sample_list != []:
-            self.mulv = cmulGate.nce_forward(V, self.s, y, sample_list)
+            self.mulv = mulGate.nce_forward(V, self.s, y, sample_list)
         else:
             self.mulv = mulGate.forward(V, self.s)
         '''

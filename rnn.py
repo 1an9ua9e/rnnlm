@@ -8,6 +8,7 @@ from output import Softmax
 import multiprocessing as mp
 import itertools as itr
 import utils
+import time
 
 class Model:
     def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4):
@@ -100,13 +101,20 @@ class Model:
         #self.W -= learning_rate * dW
         return np.array([dU,dW,dV])
 
-    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5,batch_size=1):
+    def test(self, X, Y):
+        loss = self.calculate_total_loss(X, Y)
+        print("Test Perplexity : %.2f" % 2**loss)
+
+    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5,batch_size=1, X_test=[], Y_test=[]):
         num_examples_seen = 0
         losses = []
         for epoch in range(nepoch):
+            print("----- Training epoch %d -----"%epoch)
             # For each training example...
             data_size = len(Y)
             max_batch_loop = math.floor(data_size / batch_size)
+            number = [i for i in range(max_batch_loop)] # データの処理の順番  
+            start = time.time()
             if(batch_size == 1):
                 print("training mode : online learning")
             else:
@@ -126,7 +134,8 @@ class Model:
                 else:
                     data_list = []
                     for j in range(batch_size):
-                        index = i * batch_size + j
+                        #index = i * batch_size + j
+                        index = number[i] * batch_size + j
                         data_list.append([X[index],Y[index],learning_rate])
                     pool = mp.Pool(batch_size)
                     args = zip(itr.repeat(self),itr.repeat('sgd_step'),data_list)
@@ -135,21 +144,22 @@ class Model:
                     self.W -= learning_rate * dW
                     self.V -= learning_rate * dV
                     pool.close()
-                    
-            if (epoch % evaluate_loss_after == 0):
-                loss = self.calculate_total_loss(X, Y)
-                losses.append((num_examples_seen, loss))
-                time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (time, num_examples_seen, epoch, loss))
-                # Adjust the learning rate if loss increases
-                if len(losses) > 1 and losses[-1][1] > losses[-2][1]:
-                    learning_rate = learning_rate * 0.5
-                    print("Setting learning rate to %f" % learning_rate)
-                sys.stdout.flush()
-                print("Training Perplexity : %.2f"%2**loss)
+            #np.random.shuffle(number)
+            print("training time %d[s]"%(time.time() - start))
+
+            #if (epoch % evaluate_loss_after == 0):
+            loss = self.calculate_total_loss(X, Y)
+            losses.append((num_examples_seen, loss))
+            dtime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (dtime, num_examples_seen, epoch, loss))
+            # Adjust the learning rate if loss increases
+            if len(losses) > 1 and losses[-1][1] > losses[-2][1]:
+                learning_rate = learning_rate * 0.5
+                print("Setting learning rate to %f" % learning_rate)
+            sys.stdout.flush()
+            print("Training Perplexity : %.2f"%2**loss)
+            if X_test != []:
+                self.test(X_test, Y_test)
 
         return losses
 
-    def test(self, X, Y):
-        loss = self.calculate_total_loss(X, Y)
-        print("Test Perplexity : %.2f" % 2**loss)

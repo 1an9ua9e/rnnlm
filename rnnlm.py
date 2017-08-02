@@ -6,6 +6,8 @@ from class_rnn import ClassModel
 from gru import GRUModel
 from rnn_with_nce import RNN_NCE
 from rnn_with_is import IS_Model
+from rnn_with_ns import NS_Model
+from rnn_with_truncation import TRC_Model
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -20,6 +22,7 @@ parser.add_argument("--data_size", type=int, default=1000, help="Number of sente
 parser.add_argument("--network", "-n", default="RNN", help="Network Architecture")
 parser.add_argument("--training_data", type=str, default="data/reddit-comments-2015-08.csv")
 parser.add_argument("--test_data_size", type=int, default=1000)
+parser.add_argument("--record", type=bool, default=False)
 
 args = parser.parse_args()
 '''
@@ -49,7 +52,9 @@ if args.class_dim > 0:
 elif args.network == "RNN":
     rnn = Model(args.word_dim, args.hidden_dim)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
-                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
+                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
+                       X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
+                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1])
 
 elif args.network == "GRU":
     rnn = GRUModel(args.word_dim, args.hidden_dim)
@@ -59,13 +64,25 @@ elif args.network == "GRU":
 elif args.network == "RNNwithNCE":
     rnn = RNN_NCE(unigram, args.word_dim, args.hidden_dim)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
-                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
+                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,record=args.record,
+                       X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
+                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1])
 
 elif args.network == "RNNwithIS":
     rnn = IS_Model(unigram, args.word_dim, args.hidden_dim)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
 
+elif args.network == "RNNwithNS":
+    rnn = NS_Model(unigram, args.word_dim, args.hidden_dim)
+    losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
+                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
+
+elif args.network == "RNNwithTRC":
+    rnn = TRC_Model(unigram, args.word_dim, args.hidden_dim)
+    losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
+                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
+
 print("training time : %.2f[s]"%(time.time() - start))
 
-rnn.test(X_train[args.data_size:args.data_size + args.test_data_size - 1], y_train[args.data_size:args.data_size + args.test_data_size - 1])
+#rnn.test(X_train[args.data_size:args.data_size + args.test_data_size - 1], y_train[args.data_size:args.data_size + args.test_data_size - 1])

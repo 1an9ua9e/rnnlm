@@ -11,9 +11,9 @@ import utils
 #from numpy.random import *
 import random
 '''
-Importance Samplingにより勾配の近似計算を行い、計算量を下げる->定数時間アルゴリズム？
+正規化項Zの計算をi=1~Vの途中で打ち切る(truncate)モデル
 '''
-class IS_Model:
+class TRC_Model:
     def __init__(self, unigram, word_dim, hidden_dim=100, bptt_truncate=4):
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
@@ -22,7 +22,8 @@ class IS_Model:
         self.U = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
         self.W = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
-        self.T = 50 # 損失関数の勾配の近似に用いるサンプルの個数
+        #self.T = 50 # 損失関数の勾配の近似に用いるサンプルの個数
+        self.truncation = 100
         '''
         self.samples = []
         for i in range(self.T):
@@ -47,8 +48,7 @@ class IS_Model:
         for (i,p) in enumerate(self.unigram):
             #p = 1.0 / self.word_dim
             #threshold += p ** (1.33)
-            threshold += p ** 2.0
-            #threshold += p
+            threshold += p
             if r <= threshold:
                 return i
             
@@ -103,7 +103,7 @@ class IS_Model:
         prev_s_t = np.zeros(self.hidden_dim)
         diff_s = np.zeros(self.hidden_dim)
         for t in range(0, T):
-            
+            '''
             dmulv = np.zeros(self.word_dim)
             #dmulv = np.array([0.0000001] * self.word_dim)
             y_sample_list = []
@@ -126,8 +126,7 @@ class IS_Model:
                 #dmulv[v] += c
                 #print(c)
             ''' 
-            dmulv = output.diff(layers[t].mulv, y[t])
-            '''
+            dmulv = output.truncation_diff(layers[t].mulv, y[t], self.truncation)
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             dprev_s, dU_t, dW_t, dV_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, diff_s, dmulv)

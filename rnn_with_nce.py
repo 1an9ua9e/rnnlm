@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 import os
 import math
 import numpy as np
@@ -11,6 +12,7 @@ import itertools as itr
 import utils
 #from numpy.random import *
 import random
+from record import Record
 
 class RNN_NCE:
     def __init__(self, unigram, word_dim, hidden_dim=100, bptt_truncate=4):
@@ -25,6 +27,8 @@ class RNN_NCE:
         self.k = 50 # ニセの分布から生成する単語の個数
         self.max_len = 0 # 学習データの文の最大の長さ。これに基づいて予めノイズを生成する
         self.noise = 0
+        self.rcd = 0
+        self.prob_q = 1.0 / self.word_dim
     '''
         forward propagation (predicting word probabilities)
         x is one single data, and a batch of data
@@ -32,12 +36,13 @@ class RNN_NCE:
     '''
     # 単語のunigram確率を計算する。
     def q(self, x):
+        return self.prob_q
         #return 1 / self.word_dim
-        return self.unigram[x]
+        #return self.unigram[x]
     
     # コーパスから構築したunigramの情報に基づき、単語を１つサンプルする。
     def generate_from_q(self):
-        #r = rand()
+        '''
         r = random.random()
         threshold = 0.0
         for (i,p) in enumerate(self.unigram):
@@ -46,8 +51,10 @@ class RNN_NCE:
                 return i
                 
         return 0
+        '''
+        return int(random.uniform(0, self.word_dim))
     
-    def forward_propagation(self, x, forward_list=[]):
+    def forward_propagation(self, x, y=[], forward_list=[]):
         # The total number of time steps
         T = len(x)
         layers = []
@@ -58,7 +65,12 @@ class RNN_NCE:
             #layer = RNNLayer()
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            layer.forward(input, prev_s, self.U, self.W, self.V, forward_list[t * self.k : t * self.k + self.k])
+            if forward_list == []:
+                layer.forward(input, prev_s, self.U, self.W, self.V, -1, [])                
+            elif y == []:
+                layer.forward(input, prev_s, self.U, self.W, self.V, -1, forward_list[t * self.k : t * self.k + self.k])
+            else:
+                layer.forward(input, prev_s, self.U, self.W, self.V, y[t], forward_list[t * self.k : t * self.k + self.k])
             prev_s = layer.s
             layers.append(layer)
         return layers
@@ -108,7 +120,7 @@ class RNN_NCE:
             elif o_j < -a:
                 return 0.0
             else:
-                return np.exp(o_j) / (np.exp(o_j) + self.k * self.q(x_t)) * self.Z
+                return np.exp(o_j) / (np.exp(o_j) + self.k * self.q(x_t) * self.Z)
         else:
             if o_j > a:
                 return 0.0
@@ -124,11 +136,12 @@ class RNN_NCE:
         # NCEでは順伝搬計算を部分的に行うだけでよい？
         # forward_listで計算すべきmulvの要素を指定する
         #forward_list = self.noise[n * self.k * self.max_len:(n + 1) * self.k * self.max_len]
-        forward_list = []
+
+        samples = []
         for i in range(T * self.k):
-            forward_list.append(self.generate_from_q())
-        #self.noise[n] = forward_list
-        layers = self.forward_propagation(x, forward_list)
+            samples.append(self.generate_from_q())
+            
+        layers = self.forward_propagation(x, y)#, samples)
         
         dU = np.zeros(self.U.shape)
         dV = np.zeros(self.V.shape)
@@ -137,35 +150,21 @@ class RNN_NCE:
 
         prev_s_t = np.zeros(self.hidden_dim)
         diff_s = np.zeros(self.hidden_dim)
-        #print("\nself.Z : %.4f"%self.Z)
         for t in range(0, T):
             # 学習時のみNCEを用いるプログラムではdmulvの計算を書き換えるだけで良い。
             dmulv = np.zeros(self.word_dim)
-            #pp = np.exp(layers[t].mulv[y[t]]) / self.Z
-            pp = self.Z
-            #print("\npp = %f"%pp)
-            #dmulv[y[t]] = -self.true_prob(y[t], layers[t].mulv[y[t]], 0) / pp
             dmulv[y[t]] = -self.true_prob(y[t], layers[t].mulv[y[t]], 0)
             dZ += self.true_prob(y[t], layers[t].mulv[y[t]], 0) / self.Z
             for i in range(self.k):
-                #qlayer = RNN_NCE_Layer()
-                #qx = self.generate_from_q()
-                qx = forward_list[t * self.k + i]
-                dmulv[qx] += self.true_prob(qx, layers[t].mulv[qx], 1)
-                dZ -= self.true_prob(qx, layers[t].mulv[qx], 1) / self.Z
-                '''
-                input_word = np.zeros(self.word_dim)
-                input_word[qx] = 1
-                ps = np.zeros(self.hidden_dim) if t==0 else layers[t-1].s
-                qlayer.forward(input_word, ps, self.U, self.W, self.V, y[t])
-                qo_y_t = qlayer.mulv_y_t
-                dmulv[y[t]] -= self.true_prob(qx, qo_y_t) / (self.k * self.q(qx))
-                '''
-            #print("dZ : %.4f"%dZ)
+                qx = samples[t * self.k + i]
+                a = self.true_prob(qx, layers[t].mulv[qx], 1)
+                dmulv[qx] += a
+                dZ -= a / self.Z
+
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             dprev_s, dU_t, dW_t, dV_t = layers[t].backward(
-                input, prev_s_t, self.U, self.W, self.V, diff_s, dmulv, forward_list[t * self.k:t * self.k + self.k])
+                input, prev_s_t, self.U, self.W, self.V, diff_s, dmulv)#, y[t], samples[t * self.k:t * self.k + self.k])
             prev_s_t = layers[t].s
             dmulv = np.zeros(self.word_dim)
             for i in range(t-1, max(-1, t-self.bptt_truncate-1), -1):
@@ -192,16 +191,25 @@ class RNN_NCE:
         #self.W -= learning_rate * dW
         return np.array([dU,dW,dV,dZ])
 
-    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5, batch_size=1):
+    def test(self, X, Y):
+        loss = self.calculate_total_loss(X, Y, "softmax")
+        print("Test Perplexity : %.2f" % 2**loss)
+
+    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5, batch_size=1, record=False, X_test=[], Y_test=[]):
+        data_size = len(Y)
+        #self.rcd = Record("nce", self.hidden_dim, self.word_dim, data_size, batch_size)
+        record = False
+        if record:
+            self.rcd.create()
         num_examples_seen = 0
         losses = []
-        data_size = len(Y)
         max_batch_loop = math.floor(data_size / batch_size)
         number = [i for i in range(max_batch_loop)] # データの処理の順番
         self.max_len = len(X[-1]) # 文の最大の長さ
         print("max length of sentence is %d"%self.max_len)
         print()
         for epoch in range(nepoch):
+            print("----- Training epoch %d -----"%epoch)
             # epochごとにノイズデータを生成する
             '''
             self.noise = np.zeros(self.k * self.max_len * len(X))
@@ -215,6 +223,7 @@ class RNN_NCE:
             '''
             #self.noise = [0] * data_size
             # For each training example...
+            start = time.time()
             if(batch_size == 1):
                 print("training mode : online learning")
             else:
@@ -245,32 +254,35 @@ class RNN_NCE:
                     self.V -= learning_rate * dV
                     self.Z -= learning_rate * dZ
                     pool.close()
-                
-                if (i+1) % 40 == 0:
+                '''
+                if (i+1) % 20 == 0:
                     loss = self.calculate_total_loss(X, Y, "nce")
                     print("\nnce loss : %.4f"%loss)
                     loss = self.calculate_total_loss(X, Y, "softmax")
                     print("cross entropy loss : %.4f"%loss)
                     #print("\nloss : %.4f"%loss)
                     print("self.Z = %.4f"%self.Z)
-                
-            np.random.shuffle(number)
-                    
-            if (epoch % evaluate_loss_after == 0):
-                loss = self.calculate_total_loss(X, Y, 1)
-                losses.append((num_examples_seen, loss))
-                time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (time, num_examples_seen, epoch, loss))
-                # Adjust the learning rate if loss increases
-                if len(losses) > 1 and losses[-1][1] > losses[-2][1]:
-                    learning_rate = learning_rate * 0.5
-                    print("Setting learning rate to %f" % learning_rate)
-                sys.stdout.flush()
-                print("Perplexity : %.2f"%2.0 ** loss)
+                '''
+            # データシャッフル
+            #np.random.shuffle(number)
+            print("training time %d[s]"%(time.time() - start))
+            print("partition function Z = %.2f"%self.Z)
+            loss = self.calculate_total_loss(X, Y,"softmax")
+            losses.append((num_examples_seen, loss))
+            dtime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (dtime, num_examples_seen, epoch, loss))
+            # Adjust the learning rate if loss increases
+            if len(losses) > 1 and losses[-1][1] > losses[-2][1]:
+                learning_rate = learning_rate * 0.5
+                print("Setting learning rate to %f" % learning_rate)
+            sys.stdout.flush()
+            ppl = 2.0 ** loss
+            print("Train Perplexity : %.2f"%ppl)
+            if X_test != []:
+                self.test(X_test, Y_test)
+            if record:
+                self.rcd.write(epoch+1, ppl)
 
         return losses
-    def test(self, X, Y):
-        loss = self.calculate_total_loss(X, Y, "softmax")
-        print("Test Perplexity : %.2f" % 2**loss)
 
                         
