@@ -29,6 +29,58 @@ class RNNLayer:
         dW, dprev_s = mulGate.backward(W, prev_s, dmulw)
         dU, dx = mulGate.backward(U, x, dmulu)
         return (dprev_s, dU, dW, dV)
+
+class LinTwoInputRNNLayer:
+    def forward(self, x, prev_s, prev_prev_s, U, W, V, Q):
+        self.mulu = mulGate.forward(U, x)
+        self.mulw = mulGate.forward(W, prev_s)
+        self.add = addGate.forward(self.mulw, self.mulu)
+        self.act = tanh.forward(self.add)
+        self.mulq = mulGate.forward(Q, prev_prev_s)
+        self.s = addGate.forward(self.act, self.mulq)
+        self.mulv = mulGate.forward(V, self.s)
+
+    def backward(self, x, prev_s, prev_prev_s, U, W, V, Q, diff_s, dmulv):
+        self.forward(x, prev_s, prev_prev_s, U, W, V, Q)
+        dV, dsv = mulGate.backward(V, self.s, dmulv)
+        ds = dsv + diff_s
+        dact, dmulq = addGate.backward(self.act, self.mulq, ds)
+        dadd = tanh.backward(self.add, dact)
+        dmulw, dmulu = addGate.backward(self.mulw, self.mulu, dadd)
+        dW, dprev_s = mulGate.backward(W, prev_s, dmulw)
+        dU, dx = mulGate.backward(U, x, dmulu)
+        dQ, dprev_prev_s = mulGate.backward(Q, prev_prev_s, dmulq)
+        return (dprev_s, dprev_prev_s, dU, dW, dV, dQ)
+
+class TwoInputRNNLayer:
+    def forward(self, x, prev_s, prev_prev_s, U, W, V, Q):
+        self.mulu = mulGate.forward(U, x)
+        self.mulw = mulGate.forward(W, prev_s)
+        self.mulq = mulGate.forward(Q, prev_prev_s)
+        self.add = addGate.forward(self.mulq, addGate.forward(self.mulw, self.mulu))
+        self.s = tanh.forward(self.add)
+        self.mulv = mulGate.forward(V, self.s)
+
+    def backward(self, x, prev_s, U, W, V, Q, diff_s, dmulv):
+        self.forward(x, prev_s, U, W, V)
+        dV, dsv = mulGate.backward(V, self.s, dmulv)
+        ds = dsv + diff_s
+        dadd = tanh.backward(self.add, ds)
+        dmulw, dmulu = addGate.backward(self.mulw, self.mulu, dadd)
+        dW, dprev_s = mulGate.backward(W, prev_s, dmulw)
+        dU, dx = mulGate.backward(U, x, dmulu)
+        return (dprev_s, dU, dW, dV)
+
+    def two_backward(self, x, prev_s, U, W, V, Q, diff_s, dmulv):
+        self.forward(x, prev_s, U, W, V)
+        dV, dsv = mulGate.backward(V, self.s, dmulv)
+        ds = dsv + diff_s
+        dadd = tanh.backward(self.add, ds)
+        dmulw, dmulu = addGate.backward(self.mulw, self.mulu, dadd)
+        dW, dprev_s = mulGate.backward(W, prev_s, dmulw)
+        dU, dx = mulGate.backward(U, x, dmulu)
+        dQ, dprev_prev_s = mulGate.backward(Q, prev_prev_s, dmulq)
+        return (dprev_s, dU, dW, dV)
     
 # 必要ないクラス？？？
 class RNN_NCE_Layer:

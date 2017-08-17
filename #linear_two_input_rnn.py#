@@ -10,7 +10,7 @@ import itertools as itr
 import utils
 '''
 s_t-1, s_t-2の２つの状態からs_tを決定するRNNモデル
-s_t = f(U * x_t + W * s_t-1 + Q * s_t-2)
+s_t = f(U * x_t + W * s_t-1) + Q * s_t-2
 '''
 class TwoInputModel:
     def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4):
@@ -34,7 +34,7 @@ class TwoInputModel:
         prev_prev_s = np.zeros(self.hidden_dim)
         # For each time step...
         for t in range(T):
-            layer = TwoInputRNNLayer()
+            layer = LinTwoInputRNNLayer()
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             layer.forward(input, prev_s, prev_prev_s, self.U, self.W, self.V, self.Q)
