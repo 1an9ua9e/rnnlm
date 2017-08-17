@@ -1,0 +1,10 @@
+import numpy as np
+import time
+
+start = time.time()
+a = np.zeros(1000000)
+print("%.2f"%(time.time()-start))
+
+start = time.time()
+b = np.array([0] * 1000000)
+print("%.2f"%(time.time()-start))

@@ -38,7 +38,7 @@ class RNN_NCE_Layer:
         self.add = addGate.forward(self.mulw, self.mulu)
         self.s = tanh.forward(self.add)
         if sample_list != []:
-            self.mulv = cmulGate.nce_forward(V, self.s, y, sample_list)
+            self.mulv = mulGate.nce_forward(V, self.s, y, sample_list)
         else:
             self.mulv = mulGate.forward(V, self.s)
         '''
@@ -53,6 +53,13 @@ class RNN_NCE_Layer:
         else:
             self.mulv = mulGate.forward(V, self.s)
         '''
+    def one_noise_forward(self, x, prev_s, U, W, V, y=-1, noise=0):
+        self.mulu = mulGate.forward(U, x)
+        self.mulw = mulGate.forward(W, prev_s)
+        self.add = addGate.forward(self.mulw, self.mulu)
+        self.s = tanh.forward(self.add)
+        self.mulv = mulGate.one_noise_forward(V, self.s, y, noise)
+
     def backward(self, x, prev_s, U, W, V, diff_s, dmulv, y=-1, sample_list=[]):
         self.forward(x, prev_s, U, W, V, y, sample_list)
         if sample_list != []:
@@ -60,6 +67,16 @@ class RNN_NCE_Layer:
         else:
             dV, dsv = mulGate.backward(V, self.s, dmulv)
         dV, dsv = mulGate.backward(V, self.s, dmulv)
+        ds = dsv + diff_s
+        dadd = tanh.backward(self.add, ds)
+        dmulw, dmulu = addGate.backward(self.mulw, self.mulu, dadd)
+        dW, dprev_s = mulGate.backward(W, prev_s, dmulw)
+        dU, dx = mulGate.backward(U, x, dmulu)
+        return (dprev_s, dU, dW, dV)
+
+    def one_noise_backward(self, x, prev_s, U, W, V, diff_s, dmulv, y=-1, noise=0):
+        self.one_noise_forward(x, prev_s, U, W, V, y, noise)
+        dV, dsv = mulGate.one_noise_backward(V, self.s, dmulv, y, noise)
         ds = dsv + diff_s
         dadd = tanh.backward(self.add, ds)
         dmulw, dmulu = addGate.backward(self.mulw, self.mulu, dadd)

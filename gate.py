@@ -23,6 +23,14 @@ class MultiplyGate:
             b[y] += np.dot(W[y], x)
         return b
 
+    def one_noise_forward(self, W, x, y, noise):
+        # W*xというベクトルと同じ次元のゼロベクトルをつくる
+        b = np.zeros(W.shape[0])
+        # 最大クラスの単語のみを順伝搬する
+        b[noise] += np.dot(W[noise], x)
+        b[y] += np.dot(W[y], x)
+        return b
+
     def backward(self, W, x, dz):
         dW = np.asarray(np.dot(np.transpose(np.asmatrix(dz)), np.asmatrix(x)))
         dx = np.dot(np.transpose(W), dz)
@@ -46,6 +54,28 @@ class MultiplyGate:
         return dW, dx
 
     def nce_backward(self, W, x, dz, y, sample_list):
+        l1 = len(x)
+        l2 = len(dz)
+        dW = np.asmatrix(np.zeros(l1 * l2).reshape(l2, l1))
+        mat_t_dz = np.transpose(np.asmatrix(dz))
+        mat_x = np.asmatrix(x)
+        for v in sample_list:
+            dW[v] += np.dot(mat_t_dz[v, 0], mat_x)
+        if y >= 0:
+            dW[y] += np.dot(mat_t_dz[y, 0], mat_x)
+        dW = np.asarray(dW)
+        '''
+        dx = np.zeros(l1)
+        tW = np.transpose(W)
+        for v in sample_list:
+            dx[v] += np.dot(tW[v], dz)
+        if y >= 0:
+            dx[y] += np.dot(tW[y], dz)
+        '''
+        dx = np.dot(np.transpose(W),dz)
+        return dW, dx
+
+    def one_noise_backward(self, W, x, dz, y, noise):
         l1 = len(x)
         l2 = len(dz)
         dW = np.asmatrix(np.zeros(l1 * l2).reshape(l2, l1))
