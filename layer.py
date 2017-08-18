@@ -40,10 +40,12 @@ class LinTwoInputRNNLayer:
         self.s = addGate.forward(self.act, self.mulq)
         self.mulv = mulGate.forward(V, self.s)
 
-    def backward(self, x, prev_s, prev_prev_s, U, W, V, Q, diff_s, dmulv):
+
+    def backward(self, x, prev_s, prev_prev_s, U, W, V, Q, diff_s, diff_s2, dmulv):
+        # 最初のbackwardのときはdiff_s, diff_s2は0となっている。
         self.forward(x, prev_s, prev_prev_s, U, W, V, Q)
         dV, dsv = mulGate.backward(V, self.s, dmulv)
-        ds = dsv + diff_s
+        ds = dsv + diff_s + diff_s2
         dact, dmulq = addGate.backward(self.act, self.mulq, ds)
         dadd = tanh.backward(self.add, dact)
         dmulw, dmulu = addGate.backward(self.mulw, self.mulu, dadd)
