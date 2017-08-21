@@ -61,8 +61,7 @@ class RNN_BlackOut:
         prev_s = np.zeros(self.hidden_dim)
         # For each time step...
         for t in range(T):
-            layer = RNN_NCE_Layer()
-            #layer = RNNLayer()
+            layer = RNNLayer()
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             if len(forward_list) == len(x):# ノイズサンプルが１つだけのときの順伝搬
@@ -89,22 +88,7 @@ class RNN_BlackOut:
         layers = self.forward_propagation(x)
         loss = 0.0
         for i, layer in enumerate(layers):
-            if a=="nce":# NCEで予測したときの損失
-                loss += np.log(abs(self.Z)) - layer.mulv[y[i]]
-                
-            elif a=="softmax":# Softmax関数で予測した時の損失
-                loss += output.loss(layer.mulv, y[i])
-                
-            elif a=="nce-loss":# NCE用の損失関数を計算する
-                loss += - np.log(self.true_prob(y[i], layer.mulv[y[i]], 1))
-                for j in range(self.k):
-                    if self.noise[data_number] != 0 and self.noise[data_number] != []:
-                        sample_y = self.noise[data_number][i*self.k + j]
-                        #sample_y = self.noise[data_number * self.k * self.max_len + i * self.k + j]
-                        loss += - np.log(self.true_prob(sample_y, layer.mulv[sample_y], 0))
-            #loss += - layer.mulv[y[i]]
-            #loss -= layer.mulv[y[i]]
-            #loss += output.loss(layer.mulv, y[i])
+            loss += output.loss(layer.mulv, y[i])
         return loss / float(len(y))
 
     def calculate_total_loss(self, X, Y, a):
@@ -113,24 +97,10 @@ class RNN_BlackOut:
             loss += self.calculate_loss(X[i], Y[i], i, a)
         return loss / float(len(Y))
     
-    # データが真の分布から生成されるときの確率
-    def true_prob(self, x_t, o_j, D):
-        a = 30.0
-        if D == 1:
-            if o_j > a:
-                return 1.0
-            elif o_j < -a:
-                return 0.0
-            else:
-                return np.exp(o_j) / (np.exp(o_j) + self.k * self.q(x_t) * self.Z)
-        else:
-            if o_j > a:
-                return 0.0
-            if o_j < -a:
-                return 1.0
-            else:
-                return self.k * self.q(x_t) * self.Z / (np.exp(o_j) + self.k * self.q(x_t) * self.Z)
-
+    def p(self, o_i, S):
+        a = np.exp(o_i) / self.prob_q
+        return a / (a + S)
+        
     def bptt(self, x, y, n):
         assert len(x) == len(y)
         output = Softmax()
@@ -158,21 +128,12 @@ class RNN_BlackOut:
         for t in range(0, T):
             # 学習時のみNCEを用いるプログラムではdmulvの計算を書き換えるだけで良い。
             dmulv = np.zeros(self.word_dim)
-            dmulv[y[t]] = -self.true_prob(y[t], layers[t].mulv[y[t]], 0)
-            dZ += self.true_prob(y[t], layers[t].mulv[y[t]], 0) / self.Z
-            
-            # サンプルを１つだけ使う場合
-            qx = samples[t]
-            a = self.true_prob(qx, layers[t].mulv[qx], 1)
-            dmulv[qx] += a
-            dZ -= a / self.Z
-            '''
+            S = 0.0
             for i in range(self.k):
                 qx = samples[t * self.k + i]
-                a = self.true_prob(qx, layers[t].mulv[qx], 1)
-                dmulv[qx] += a
-                dZ -= a / self.Z
-            '''
+                S += np.exp(layers[t].mulv[qx])            
+            dmulv[y[t]] = self.p(y[t], S)
+
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             dprev_s, dU_t, dW_t, dV_t = layers[t].backward(
