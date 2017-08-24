@@ -77,8 +77,8 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
         unigram[i] = x[1]
         total += unigram[i]
     
-    unigram = (unigram ** 0.5)/ (float(total) ** 0.5)
-    #unigram = unigram / float(total)
+    #unigram = (unigram/float(total)) ** 0.75
+    unigram = unigram / float(total)
     #unigram = unigram[::-1] # reverse レア単語に高い確率を付与する
 
     

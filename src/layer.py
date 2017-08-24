@@ -1,11 +1,9 @@
 from activation import Tanh, Sigmoid, Inverse
 from gate import AddGate, MultiplyGate, HadamardGate
-from c_gate import CMultiplyGate
 import numpy as np
 import sys
 
 mulGate = MultiplyGate()
-cmulGate = CMultiplyGate()
 addGate = AddGate()
 hadGate = HadamardGate()
 tanh = Tanh()

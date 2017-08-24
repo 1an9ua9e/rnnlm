@@ -9,6 +9,7 @@ from rnn_with_is import IS_Model
 from rnn_with_ns import NS_Model
 from rnn_with_truncation import TRC_Model
 from linear_two_input_rnn import LinTwoInputModel
+from rnn_with_blackout import RNN_BlackOut
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -71,6 +72,13 @@ elif args.network == "RNNwithNCE":
 
 elif args.network == "LinTwoInputRNN":
     rnn = LinTwoInputModel(args.word_dim, args.hidden_dim)
+    losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
+                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
+                       X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
+                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1])
+
+elif args.network == "RNN_BlackOut":
+    rnn = RNN_BlackOut(unigram, args.word_dim, args.hidden_dim)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
                        X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],

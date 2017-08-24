@@ -2,7 +2,7 @@ import numpy as np
 
 class Softmax:
     def predict(self, x):
-        #x = x - np.max(x)
+        x = x - np.max(x)
         exp_scores = np.exp(x)
         return exp_scores / np.sum(exp_scores)
 

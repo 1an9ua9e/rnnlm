@@ -16,15 +16,14 @@ from record import Record
 
 class RNN_BlackOut:
     def __init__(self, unigram, word_dim, hidden_dim=100, bptt_truncate=4):
+        self.unigram = unigram
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.bptt_truncate = bptt_truncate
-        self.unigram = unigram
         self.U = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
         self.W = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
-        self.Z = 30.0 # NCEで推定すべき分配関数
-        self.k = 50 # ニセの分布から生成する単語の個数
+        self.k = 10 # ニセの分布から生成する単語の個数
         self.max_len = 0 # 学習データの文の最大の長さ。これに基づいて予めノイズを生成する
         self.noise = 0
         self.rcd = 0
@@ -36,23 +35,25 @@ class RNN_BlackOut:
     '''
     # 単語のunigram確率を計算する。
     def q(self, x):
-        return self.prob_q
+        #return self.prob_q
         #return 1 / self.word_dim
-        #return self.unigram[x]
+        if self.unigram[x] <= 0.0:
+            return 0.000001
+        return self.unigram[x]
     
     # コーパスから構築したunigramの情報に基づき、単語を１つサンプルする。
     def generate_from_q(self):
-        '''
         r = random.random()
         threshold = 0.0
         for (i,p) in enumerate(self.unigram):
+            #p = 1.0 / self.word_dim
+            #threshold += p ** (1.33)
+            #threshold += p ** 2.0
             threshold += p
             if r <= threshold:
                 return i
-                
         return 0
-        '''
-        return int(random.uniform(0, self.word_dim))
+        #return int(random.uniform(0, self.word_dim))
     
     def forward_propagation(self, x, y=[], forward_list=[]):
         # The total number of time steps
@@ -64,14 +65,7 @@ class RNN_BlackOut:
             layer = RNNLayer()
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            if len(forward_list) == len(x):# ノイズサンプルが１つだけのときの順伝搬
-                layer.one_noise_forward(input, prev_s, self.U, self.W, self.V, y[t], forward_list[t])                                
-            elif forward_list == []:
-                layer.forward(input, prev_s, self.U, self.W, self.V, -1, [])                
-            elif y == []:
-                layer.forward(input, prev_s, self.U, self.W, self.V, -1, forward_list[t * self.k : t * self.k + self.k])
-            else:
-                layer.forward(input, prev_s, self.U, self.W, self.V, y[t], forward_list[t * self.k : t * self.k + self.k])
+            layer.forward(input, prev_s, self.U, self.W, self.V)
             prev_s = layer.s
             layers.append(layer)
         return layers
@@ -82,7 +76,7 @@ class RNN_BlackOut:
         layers = self.forward_propagation(x)
         return [np.argmax(output.predict(layer.mulv)) for layer in layers]
 
-    def calculate_loss(self, x, y, data_number, a="softmax"):
+    def calculate_loss(self, x, y):
         assert len(x) == len(y)
         output = Softmax()
         layers = self.forward_propagation(x)
@@ -91,37 +85,35 @@ class RNN_BlackOut:
             loss += output.loss(layer.mulv, y[i])
         return loss / float(len(y))
 
-    def calculate_total_loss(self, X, Y, a):
+    def calculate_total_loss(self, X, Y):
         loss = 0.0
         for i in range(len(Y)):
-            loss += self.calculate_loss(X[i], Y[i], i, a)
+            loss += self.calculate_loss(X[i], Y[i])
         return loss / float(len(Y))
     
-    def p(self, o_i, S):
-        a = np.exp(o_i) / self.prob_q
+    def p(self, i, o_i, S):
+        if o_i > 50.0:
+            a = np.exp(50.0) / self.q(i)
+        else:
+            a = np.exp(o_i) / self.q(i)
+        #a = np.exp(o_i)
         return a / (a + S)
         
     def bptt(self, x, y, n):
         assert len(x) == len(y)
         output = Softmax()
         T = len(x)
-        # NCEでは順伝搬計算を部分的に行うだけでよい？
-        # forward_listで計算すべきmulvの要素を指定する
-        #forward_list = self.noise[n * self.k * self.max_len:(n + 1) * self.k * self.max_len]
-
-        #samples = randint(0, self.word_dim, T * self.k)
-        
+        '''
         samples = []
         for i in range(T * self.k):
             samples.append(self.generate_from_q())
-        
+        '''
         
         layers = self.forward_propagation(x)#, y, samples)
         
         dU = np.zeros(self.U.shape)
         dV = np.zeros(self.V.shape)
         dW = np.zeros(self.W.shape)
-        dZ = 0.0
 
         prev_s_t = np.zeros(self.hidden_dim)
         diff_s = np.zeros(self.hidden_dim)
@@ -129,10 +121,44 @@ class RNN_BlackOut:
             # 学習時のみNCEを用いるプログラムではdmulvの計算を書き換えるだけで良い。
             dmulv = np.zeros(self.word_dim)
             S = 0.0
+            sample = []
+            sample_prob = []
             for i in range(self.k):
-                qx = samples[t * self.k + i]
-                S += np.exp(layers[t].mulv[qx])            
-            dmulv[y[t]] = self.p(y[t], S)
+                qx = y[t]
+                while qx == y[t] or qx in sample:
+                    qx = self.generate_from_q()
+                sample.append(qx)
+                if layers[t].mulv[qx] > 50.0:
+                    S += np.exp(50.0) / self.q(qx)
+                else:
+                    S += np.exp(layers[t].mulv[qx]) / self.q(qx)
+                # qはどの単語に対しても同じ値になるよう設定している
+                # したがって、pの項からqが消える
+                #S += np.exp(layers[t].mulv[qx])
+                
+            dmulv[y[t]] = self.p(y[t], layers[t].mulv[y[t]], S) - 1.0
+            
+            for j in sample:
+                sample_prob.append(self.p(j, layers[t].mulv[j], S))
+                
+            for j in sample:
+                a = 0.0
+                if layers[t].mulv[j] - layers[t].mulv[y[t]] > 50.0:
+                    a = self.p(y[t], layers[t].mulv[y[t]], S) * np.exp(50.0)
+                else:
+                    a = self.p(y[t], layers[t].mulv[y[t]], S) * np.exp(layers[t].mulv[j] - layers[t].mulv[y[t]])
+                b = 0.0
+                for (ind,k) in enumerate(sample):
+                    if k != j:
+                        p_k = sample_prob[ind]#self.p(layers[t].mulv[k], S)
+                        if layers[t].mulv[j] - layers[t].mulv[k] > 50.0:
+                            b += np.exp(50.0) * p_k / (1.0 - p_k)
+                        else:
+                            b += np.exp(layers[t].mulv[j] - layers[t].mulv[k]) * p_k / (1.0 - p_k)
+                p_j = self.p(j, layers[t].mulv[j], S)
+                c = (1.0 - 2.0 * p_j) * p_j / (1.0 - p_j)
+                dmulv[j] = a - b + c
+            
 
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
@@ -150,22 +176,22 @@ class RNN_BlackOut:
             dV += dV_t
             dU += dU_t
             dW += dW_t
-        return (dU, dW, dV, dZ)
+        return (dU, dW, dV)
 
     def sgd_step(self, data):
         x = data[0]
         y = data[1]
         learning_rate = data[2]
         n = data[3] # dataの番号
-        dU, dW, dV, dZ = self.bptt(x, y, n)
+        dU, dW, dV = self.bptt(x, y, n)
         #print(os.getpid())
         #self.U -= learning_rate * dU
         #self.V -= learning_rate * dV
         #self.W -= learning_rate * dW
-        return np.array([dU,dW,dV,dZ])
+        return np.array([dU,dW,dV])
 
     def test(self, X, Y):
-        loss = self.calculate_total_loss(X, Y, "softmax")
+        loss = self.calculate_total_loss(X, Y)
         print("Test Perplexity : %.2f" % 2**loss)
 
     def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5, batch_size=1, record=False, X_test=[], Y_test=[]):
@@ -208,11 +234,10 @@ class RNN_BlackOut:
                 sys.stdout.flush()
 
                 if batch_size <= 1:
-                    dU,dW,dV,dZ = self.sgd_step((X[i],Y[i],learning_rate, i))
+                    dU,dW,dV = self.sgd_step((X[i],Y[i],learning_rate, i))
                     self.U -= learning_rate * dU
                     self.W -= learning_rate * dW
                     self.V -= learning_rate * dV
-                    self.Z -= learning_rate * dZ
                 # minibatch learning
                 else:
                     data_list = []
@@ -221,21 +246,15 @@ class RNN_BlackOut:
                         data_list.append([X[index],Y[index],learning_rate, index])
                     pool = mp.Pool(batch_size)
                     args = zip(itr.repeat(self),itr.repeat('sgd_step'),data_list)
-                    dU,dW,dV,dZ = np.sum(np.array(pool.map(utils.tomap,args)),axis=0)
+                    dU,dW,dV = np.sum(np.array(pool.map(utils.tomap,args)),axis=0)
                     self.U -= learning_rate * dU
                     self.W -= learning_rate * dW
                     self.V -= learning_rate * dV
-                    self.Z -= learning_rate * dZ
                     pool.close()
-                '''
+                
                 if (i+1) % 20 == 0:
-                    loss = self.calculate_total_loss(X, Y, "nce")
-                    print("\nnce loss : %.4f"%loss)
-                    loss = self.calculate_total_loss(X, Y, "softmax")
-                    print("cross entropy loss : %.4f"%loss)
-                    #print("\nloss : %.4f"%loss)
-                    print("self.Z = %.4f"%self.Z)
-                '''
+                    loss = self.calculate_total_loss(X, Y)
+                    print("\Train Perplexity : %.2f"%2.0 ** loss)
             # データシャッフル
             #np.random.shuffle(number)
             print("training time %d[s]"%(time.time() - start))
@@ -253,8 +272,6 @@ class RNN_BlackOut:
             print("Train Perplexity : %.2f"%ppl)
             if X_test != []:
                 self.test(X_test, Y_test)
-            if record:
-                self.rcd.write(epoch+1, ppl)
 
         return losses
 
