@@ -23,7 +23,7 @@ class RNN_BlackOut:
         self.U = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
         self.W = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
-        self.k = 10 # ニセの分布から生成する単語の個数
+        self.k = 5 # ニセの分布から生成する単語の個数
         self.max_len = 0 # 学習データの文の最大の長さ。これに基づいて予めノイズを生成する
         self.noise = 0
         self.rcd = 0
@@ -35,14 +35,16 @@ class RNN_BlackOut:
     '''
     # 単語のunigram確率を計算する。
     def q(self, x):
-        #return self.prob_q
-        #return 1 / self.word_dim
+        return self.prob_q
+        '''
         if self.unigram[x] <= 0.0:
             return 0.000001
         return self.unigram[x]
+        '''
     
     # コーパスから構築したunigramの情報に基づき、単語を１つサンプルする。
     def generate_from_q(self):
+        '''
         r = random.random()
         threshold = 0.0
         for (i,p) in enumerate(self.unigram):
@@ -53,7 +55,8 @@ class RNN_BlackOut:
             if r <= threshold:
                 return i
         return 0
-        #return int(random.uniform(0, self.word_dim))
+        '''
+        return int(random.uniform(0, self.word_dim))
     
     def forward_propagation(self, x, y=[], forward_list=[]):
         # The total number of time steps
@@ -92,11 +95,13 @@ class RNN_BlackOut:
         return loss / float(len(Y))
     
     def p(self, i, o_i, S):
+        '''
         if o_i > 50.0:
             a = np.exp(50.0) / self.q(i)
         else:
             a = np.exp(o_i) / self.q(i)
-        #a = np.exp(o_i)
+        '''
+        a = np.exp(o_i)
         return a / (a + S)
         
     def bptt(self, x, y, n):
@@ -128,13 +133,15 @@ class RNN_BlackOut:
                 while qx == y[t] or qx in sample:
                     qx = self.generate_from_q()
                 sample.append(qx)
+                '''
                 if layers[t].mulv[qx] > 50.0:
                     S += np.exp(50.0) / self.q(qx)
                 else:
                     S += np.exp(layers[t].mulv[qx]) / self.q(qx)
+                '''
                 # qはどの単語に対しても同じ値になるよう設定している
                 # したがって、pの項からqが消える
-                #S += np.exp(layers[t].mulv[qx])
+                S += np.exp(layers[t].mulv[qx])
                 
             dmulv[y[t]] = self.p(y[t], layers[t].mulv[y[t]], S) - 1.0
             
@@ -154,7 +161,7 @@ class RNN_BlackOut:
                         if layers[t].mulv[j] - layers[t].mulv[k] > 50.0:
                             b += np.exp(50.0) * p_k / (1.0 - p_k)
                         else:
-                            b += np.exp(layers[t].mulv[j] - layers[t].mulv[k]) * p_k / (1.0 - p_k)
+                            b += np.exp(layers[t].mulv[j] - layers[t].mulv[k]) * p_k * p_k / (1.0 - p_k)
                 p_j = self.p(j, layers[t].mulv[j], S)
                 c = (1.0 - 2.0 * p_j) * p_j / (1.0 - p_j)
                 dmulv[j] = a - b + c
@@ -251,15 +258,15 @@ class RNN_BlackOut:
                     self.W -= learning_rate * dW
                     self.V -= learning_rate * dV
                     pool.close()
-                
+                '''
                 if (i+1) % 20 == 0:
                     loss = self.calculate_total_loss(X, Y)
                     print("\Train Perplexity : %.2f"%2.0 ** loss)
+                '''
             # データシャッフル
             #np.random.shuffle(number)
             print("training time %d[s]"%(time.time() - start))
-            print("partition function Z = %.2f"%self.Z)
-            loss = self.calculate_total_loss(X, Y,"softmax")
+            loss = self.calculate_total_loss(X, Y)
             losses.append((num_examples_seen, loss))
             dtime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (dtime, num_examples_seen, epoch, loss))
