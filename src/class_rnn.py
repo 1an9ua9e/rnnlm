@@ -1,5 +1,6 @@
 # -*- coding:utf-8 -*-
 from datetime import datetime
+import time
 import os
 import math
 import numpy as np
@@ -13,7 +14,7 @@ import itertools as itr
 import utils
 
 class ClassModel:
-    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4,class_dim=0,index_to_class_dist=[],class_to_word_list=[]):
+    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4,class_dim=0,index_to_class=[],class_to_word_list=[]):
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.class_dim = class_dim
@@ -23,7 +24,8 @@ class ClassModel:
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
         self.Q = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (class_dim, hidden_dim))
 
-        self.class_dist = np.array(index_to_class_dist)
+        #self.class_dist = np.array(index_to_class_dist)
+        self.word2class = np.array(index_to_class)
         self.word_list = np.array(class_to_word_list)
     '''
         forward propagation (predicting word probabilities)
@@ -37,7 +39,7 @@ class ClassModel:
         prev_s = np.zeros(self.hidden_dim)
         # For each time step...
         for t in range(T):
-            layer = ClassRNNLayer(self.word_list)
+            layer = ClassRNNLayer()
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
             
@@ -48,7 +50,8 @@ class ClassModel:
                 # time step tにおける望ましい出力y[t]と同じクラスに属する単語
                 # について、順伝搬の計算を行う必要がある。したがって
                 # forward計算に教師データを渡さなくてはならない。
-                layer.forward(input, prev_s, self.U, self.W, self.V, self.Q, self.class_dist[y[t]])
+                #layer.forward(input, prev_s, self.U, self.W, self.V, self.Q, self.class_dist[y[t]])
+                layer.forward(input, prev_s, self.U, self.W, self.V, self.Q, self.word_list[self.word2class[y[t]]], y[t])
             prev_s = layer.s
             layers.append(layer)
         return layers
@@ -82,13 +85,17 @@ class ClassModel:
         for t, layer in enumerate(layers):
             # 単語の出力の損失だけを計算する場合
             # update_loss = - log{ p(w_j|c(w_j),s) * p(c(w_j)|s) }
+            '''
             c_j = np.argmax(self.class_dist[y[t]])
+            c_j = self.word2class[y[t]]
             if y[t] in self.word_list[c_j]:
                 loss += output.loss(layer.mulq, c_j)
                 loss += output.sub_loss(layer.mulv, y[t], self.word_list[c_j], c_j)
             else:
                 loss += class_output.uni_loss(layer.mulq, self.word_dim, self.word_list[c_j], c_j)
-            
+            '''
+            c_t = self.word2class[y[t]]
+            loss += class_output.loss(layers[t].mulq, layers[t].mulv, c_t, y[t], self.word_list[c_t])
             # 単語とクラス、両方の出力層で損失を計算する場合
             '''
             loss += output.loss(layer.mulv, y[i])
@@ -120,12 +127,15 @@ class ClassModel:
             # 該当するノードのみ誤差を伝搬させる必要がある
             
             #dmulv = output.diff(layers[t].mulv, y[t])
-            word_list = self.word_list[np.argmax(self.class_dist[y[t]])] # y[t]と同じクラスの単語リスト
-            dmulv = output.sub_diff(layers[t].mulv, y[t], word_list)
-            dmulq = class_output.diff(layers[t].mulq, self.class_dist[y[t]])
+            #word_list = self.word_list[np.argmax(self.class_dist[y[t]])] # y[t]と同じクラスの単語リスト
+            word_list = self.word_list[self.word2class[y[t]]]
+            #dmulv = output.sub_diff(layers[t].mulv, y[t], word_list)
+            dmulv = output.hard_class_diff(layers[t].mulv, y[t], word_list)
+            dmulq = class_output.diff(layers[t].mulq, self.word2class[y[t]])
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq, self.class_dist[y[t]])
+            class_y_t = self.word2class[y[t]]
+            dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq, self.word_list[class_y_t], y[t], class_y_t)
             prev_s_t = layers[t].s
             dmulv = np.zeros(self.word_dim)
             dmulq = np.zeros(self.class_dim)
@@ -133,7 +143,7 @@ class ClassModel:
                 input = np.zeros(self.word_dim)
                 input[x[i]] = 1
                 prev_s_i = np.zeros(self.hidden_dim) if i == 0 else layers[i-1].s
-                dprev_s, dU_i, dW_i, dV_i, dQ_i = layers[i].backward(input, prev_s_i, self.U, self.W, self.V, self.Q, dprev_s, dmulv, dmulq, self.class_dist[y[t]])
+                dprev_s, dU_i, dW_i, dV_i, dQ_i = layers[i].backward(input, prev_s_i, self.U, self.W, self.V, self.Q, dprev_s, dmulv, dmulq, [], -1, -1)
                 dU_t += dU_i
                 dW_t += dW_i
             dV += dV_t
@@ -152,8 +162,12 @@ class ClassModel:
         #self.V -= learning_rate * dV
         #self.W -= learning_rate * dW
         return np.array([dU,dW,dV,dQ])
-
-    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5,batch_size=1):
+    
+    def test(self, X, Y):
+        loss = self.calculate_total_loss(X, Y)
+        print("Test Perplexity : %.2f" % 2.0**loss)
+                        
+    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5,batch_size=1, X_test=[], Y_test=[]):
         num_examples_seen = 0
         losses = []
         for epoch in range(nepoch):
@@ -161,6 +175,9 @@ class ClassModel:
             num_examples_seen = 0
             data_size = len(Y)
             max_batch_loop = math.floor(data_size / batch_size)
+            number = [i for i in range(max_batch_loop)] # データの処理の順番
+            start = time.time()
+                            
             if(batch_size == 1):
                 print("training mode : online learning")
             else:
@@ -186,7 +203,7 @@ class ClassModel:
                 else:
                     data_list = []
                     for j in range(batch_size):
-                        index = i * batch_size + j
+                        index = number[i] * batch_size + j
                         data_list.append([X[index],Y[index],learning_rate])
                     pool = mp.Pool(batch_size)
                     args = zip(itr.repeat(self),itr.repeat('sgd_step'),data_list)
@@ -196,16 +213,25 @@ class ClassModel:
                     self.V -= learning_rate * dV
                     self.Q -= learning_rate * dQ
                     pool.close()
-                    
-            if (epoch % evaluate_loss_after == 0):
-                loss = self.calculate_total_loss(X, Y)
-                losses.append((num_examples_seen, loss))
-                time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (time, num_examples_seen, epoch, loss))
-                # Adjust the learning rate if loss increases
-                if len(losses) > 1 and losses[-1][1] > losses[-2][1]:
-                    learning_rate = learning_rate * 0.5
-                    print("Setting learning rate to %f" % learning_rate)
-                sys.stdout.flush()
-
+                '''
+                if (i+1)%20 == 0:
+                    loss = self.calculate_total_loss(X, Y)
+                    print("PPL:%.2f"%2.0**loss)
+                '''
+            print("training time %d[s]"%(time.time() - start))
+            #np.random.shuffle(number)
+                        
+            loss = self.calculate_total_loss(X, Y)    
+            losses.append((num_examples_seen, loss))
+            dtime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (dtime, num_examples_seen, epoch, loss))
+            # Adjust the learning rate if loss increases
+            if len(losses) > 1 and losses[-1][1] > losses[-2][1]:
+                learning_rate = learning_rate * 0.5
+                print("Setting learning rate to %f" % learning_rate)
+            sys.stdout.flush()
+            print("Training Perplexity : %.2f"%2**loss)
+            if X_test != []:
+                self.test(X_test, Y_test)
+                                            
         return losses

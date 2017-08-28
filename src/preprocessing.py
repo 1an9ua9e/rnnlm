@@ -103,8 +103,10 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
     X_train = np.asarray([[word_to_index[w] for w in sent[:-1]] for sent in tokenized_sentences])
     y_train = np.asarray([[word_to_index[w] for w in sent[1:]] for sent in tokenized_sentences])
 
-    # 単語が所属するクラスをクラス分布で表す
+    # 単語が所属するクラスをクラス分布で表す <- ソフトクラスタリング用
     index_to_class_dist = []
+    # 各単語に対応するクラスを格納する <- ハードクラスタリング用
+    index_to_class = [0] * vocabulary_size
     num_tokens = 0
     class_to_word_list = []
     if class_dim > 0:
@@ -119,6 +121,8 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
         class_to_word_list[class_dim - 1].append(vocabulary_size - 1)
         # 未知語はクラスclass_size-1を予測する
         index_to_class_dist[vocabulary_size - 1][class_dim - 1] = 1.0
+        index_to_class[vocabulary_size - 1] = class_dim - 1
+        
     
         df = 0.0
         a = 0
@@ -128,11 +132,13 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
                 df = 1.0
             if df > (a + 1) / (class_dim - 1):
                 index_to_class_dist[i][a] = 1.0
+                index_to_class[i] = a
                 class_to_word_list[a].append(i)
                 if a < class_dim - 2:
                     a += 1
             else:
                 index_to_class_dist[i][a] = 1.0
+                index_to_class[i] = a
                 class_to_word_list[a].append(i)
 
     # 作成したクラスターを表示する
@@ -183,7 +189,10 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
     print("\ny:\n%s\n%s" % (" ".join([index_to_word[x] for x in y_example]), y_example))
 
     if class_dim > 0:
-        return X_train, y_train, index_to_class_dist, class_to_word_list
+        # ソフトクラスタリングの場合
+        #return X_train, y_train, index_to_class_dist, class_to_word_list
+        # ハードクラスタリングの場合
+        return X_train, y_train, index_to_class, class_to_word_list
     else:
         return X_train, y_train, unigram
 

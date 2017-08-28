@@ -10,7 +10,10 @@ class MultiplyGate:
         b = np.zeros(W.shape[0])
         # 最大クラスの単語のみを順伝搬する
         for i in word_list:
-            b[i] += np.dot(W[int(i)], x)
+            if type(i) == int:
+                b[i] += np.dot(W[i], x)
+            else:
+                b[i] += np.dot(W[int(i)], x)
         return b
 
     def nce_forward(self, W, x, y, word_list):

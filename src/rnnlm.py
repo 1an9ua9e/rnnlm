@@ -36,7 +36,13 @@ batch_size =
 '''
 
 if args.class_dim > 0:
+    # ソフトクラスタリングの場合
+    '''
     X_train, y_train, index_to_class_dist, class_to_word_list = getSentenceData(
+        args.training_data, args.word_dim, args.class_dim,sort=args.sort)
+    '''
+    # ハードクラスタリングの場合
+    X_train, y_train, index_to_class, class_to_word_list = getSentenceData(
         args.training_data, args.word_dim, args.class_dim,sort=args.sort)
 else:
     X_train, y_train, unigram = getSentenceData(args.training_data, args.word_dim, args.class_dim, sort=args.sort)
@@ -47,10 +53,19 @@ start = time.time()
 rnn = 0
 
 if args.class_dim > 0:
+    # ソフトクラスタリングの場合
+    '''
     rnn = ClassModel(args.word_dim, args.hidden_dim, class_dim=args.class_dim,
                            index_to_class_dist=index_to_class_dist, class_to_word_list=class_to_word_list)
+    '''
+    # ハードクラスタリングの場合
+    rnn = ClassModel(args.word_dim, args.hidden_dim, class_dim=args.class_dim,
+                           index_to_class=index_to_class, class_to_word_list=class_to_word_list)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
-                             learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size)
+                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
+                       X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
+                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1])
+
 elif args.network == "RNN":
     rnn = Model(args.word_dim, args.hidden_dim)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
