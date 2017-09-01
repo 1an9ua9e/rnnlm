@@ -128,8 +128,8 @@ class ClassModel:
             
             #dmulv = output.diff(layers[t].mulv, y[t])
             #word_list = self.word_list[np.argmax(self.class_dist[y[t]])] # y[t]と同じクラスの単語リスト
+
             word_list = self.word_list[self.word2class[y[t]]]
-            #dmulv = output.sub_diff(layers[t].mulv, y[t], word_list)
             dmulv = output.hard_class_diff(layers[t].mulv, y[t], word_list)
             dmulq = class_output.diff(layers[t].mulq, self.word2class[y[t]])
             input = np.zeros(self.word_dim)

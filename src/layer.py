@@ -213,8 +213,10 @@ class ClassRNNLayer:
 
         # クラス分布で最大のクラスに属する単語のみを順伝搬させる
         #self.mulv = mulGate.sub_forward(V, self.s, self.word_list[class_index])
-        
-        self.mulv = mulGate.sub_forward(V, self.s, word_list)
+        if word_list == []:
+            self.mulv = mulGate.forward(V, self.s)
+        else:
+            self.mulv = mulGate.sub_forward(V, self.s, word_list)
    
 
     def backward(self, x, prev_s, U, W, V, Q, diff_s, dmulv, dmulq, word_list, y_t, class_y_t):#dist=[]):
