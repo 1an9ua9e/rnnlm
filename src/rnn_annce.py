@@ -23,7 +23,9 @@ class RNN_ANNCE:
         self.U = np.random.uniform(-np.sqrt(1. / word_dim), np.sqrt(1. / word_dim), (hidden_dim, word_dim))
         self.W = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (hidden_dim, hidden_dim))
         self.V = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
+        self.R = np.random.uniform(-np.sqrt(1. / hidden_dim), np.sqrt(1. / hidden_dim), (word_dim, hidden_dim))
         self.Z = 30.0 # NCEで推定すべき分配関数
+        self.Z2 = 30.0
         self.k = 200 # ニセの分布から生成する単語の個数
         self.max_len = 0 # 学習データの文の最大の長さ。これに基づいて予めノイズを生成する
         self.noise = 0
