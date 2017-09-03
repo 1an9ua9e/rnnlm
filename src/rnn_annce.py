@@ -43,6 +43,26 @@ class RNN_ANNCE:
         #return self.unigram[x]
     
     # コーパスから構築したunigramの情報に基づき、単語を１つサンプルする。
+    def adaptive_q(self, r_y):
+        return r_y / self.Z2
+    
+    # ベクトルとして与えられた離散確率分布からノイズを発生させる
+    def sample_from_prob_vector(self, r):
+        max_value = -1.0
+        l = []
+        for i, v in enumerate(r):
+            if v > max_value:
+                max_value = v
+                l.appen(i)
+        if len(l) < self.k:
+            print("poor noise samples")
+            return l
+        else:
+            return l[len(l)-self.k:]
+            
+    def sample_from_adaptive_q(self, r):
+        return sample_from_prob_vector(r)
+    
     def generate_from_q(self):
         '''
         r = random.random()
