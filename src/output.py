@@ -56,7 +56,8 @@ class Softmax:
         return probs
     # クラスベース言語モデル(ハードクラスタリング)で使用する
     def hard_class_diff(self, o_t, y_t, word_list):
-        probs = self.rest_predict(o_t, word_list)
+        probs = self.predict(o_t)
+        #probs = self.rest_predict(o_t, word_list)
         probs[y_t] -= 1.0
         return probs
         
@@ -90,7 +91,7 @@ class ClassSoftmax:
     def loss(self, q_t, o_t, c_t, y_t, word_list):
         p1 = self.predict(q_t)
         p2 = self.rest_predict(o_t, word_list)
-        return -np.log(p1[c_t] * p2[y_t])
+        return -np.log(p1[c_t]) -np.log(p2[y_t])
 
     def uni_loss(self, x, v_size, word_list, class_id):
         probs = self.predict(x)

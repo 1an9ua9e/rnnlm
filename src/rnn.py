@@ -103,11 +103,14 @@ class Model:
 
     def test(self, X, Y):
         loss = self.calculate_total_loss(X, Y)
-        print("Test Perplexity : %.2f" % 2**loss)
+        ppl = 2.0 ** loss
+        print("Test Perplexity : %.2f" % ppl)
+        return ppl
 
     def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5,batch_size=1, X_test=[], Y_test=[]):
         num_examples_seen = 0
         losses = []
+        test_losses = []
         for epoch in range(nepoch):
             print("----- Training epoch %d -----"%epoch)
             # For each training example...
@@ -149,7 +152,9 @@ class Model:
 
             #if (epoch % evaluate_loss_after == 0):
             loss = self.calculate_total_loss(X, Y)
-            losses.append((num_examples_seen, loss))
+            ppl = 2.0 ** loss
+            losses.append(ppl)
+
             dtime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (dtime, num_examples_seen, epoch, loss))
             # Adjust the learning rate if loss increases
@@ -159,7 +164,8 @@ class Model:
             sys.stdout.flush()
             print("Training Perplexity : %.2f"%2**loss)
             if X_test != []:
-                self.test(X_test, Y_test)
+                test_ppl = self.test(X_test, Y_test)
+                test_losses.append(test_ppl)
 
-        return losses
+        return (losses, test_losses)
 

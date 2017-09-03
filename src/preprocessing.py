@@ -123,7 +123,7 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
         index_to_class_dist[vocabulary_size - 1][class_dim - 1] = 1.0
         index_to_class[vocabulary_size - 1] = class_dim - 1
         
-    
+        
         df = 0.0
         a = 0
         for i in range(vocabulary_size-1):
@@ -140,7 +140,12 @@ def getSentenceData(path, vocabulary_size=8000, class_dim=0, sort=False):
                 index_to_class_dist[i][a] = 1.0
                 index_to_class[i] = a
                 class_to_word_list[a].append(i)
-
+        '''
+        for i in range(vocabulary_size):
+            new_class = i % class_dim
+            index_to_class[i] = new_class
+            class_to_word_list[new_class].append(i)
+        '''
     # 作成したクラスターを表示する
     '''
     for i in range(class_dim):

@@ -76,13 +76,19 @@ class ClassModel:
             
         return [np.argmax(output.predict(layer_mulv)) for layer_mulv in layers_mulv]
 
-    def calculate_loss(self, x, y):
+    def calculate_loss(self, x, y, eos):
         assert len(x) == len(y)
         output = Softmax()
         class_output = ClassSoftmax()
         layers = self.forward_propagation(x, y)
         loss = 0.0
         for t, layer in enumerate(layers):
+            if eos and t == len(y) - 1:
+                return loss / float(len(y) - 1)
+            '''
+            if t == len(y) - 1:            
+                loss += output.loss(layers[t].mulv, y[t])
+            '''
             # 単語の出力の損失だけを計算する場合
             # update_loss = - log{ p(w_j|c(w_j),s) * p(c(w_j)|s) }
             '''
@@ -103,10 +109,10 @@ class ClassModel:
             '''
         return loss / float(len(y))
 
-    def calculate_total_loss(self, X, Y):
+    def calculate_total_loss(self, X, Y, eos=False):
         loss = 0.0
         for i in range(len(Y)):
-            loss += self.calculate_loss(X[i], Y[i])
+            loss += self.calculate_loss(X[i], Y[i], eos)
         return loss / float(len(Y))
 
     def bptt(self, x, y):
@@ -128,14 +134,15 @@ class ClassModel:
             
             #dmulv = output.diff(layers[t].mulv, y[t])
             #word_list = self.word_list[np.argmax(self.class_dist[y[t]])] # y[t]と同じクラスの単語リスト
-
-            word_list = self.word_list[self.word2class[y[t]]]
+            
+            class_y_t = self.word2class[y[t]]
+            word_list = self.word_list[class_y_t]
             dmulv = output.hard_class_diff(layers[t].mulv, y[t], word_list)
-            dmulq = class_output.diff(layers[t].mulq, self.word2class[y[t]])
+            dmulq = class_output.diff(layers[t].mulq, class_y_t)
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            class_y_t = self.word2class[y[t]]
-            dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq, self.word_list[class_y_t], y[t], class_y_t)
+            dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(
+                input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq, word_list, y[t], class_y_t)
             prev_s_t = layers[t].s
             dmulv = np.zeros(self.word_dim)
             dmulq = np.zeros(self.class_dim)
@@ -164,7 +171,7 @@ class ClassModel:
         return np.array([dU,dW,dV,dQ])
     
     def test(self, X, Y):
-        loss = self.calculate_total_loss(X, Y)
+        loss = self.calculate_total_loss(X, Y, True)
         print("Test Perplexity : %.2f" % 2.0**loss)
                         
     def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5,batch_size=1, X_test=[], Y_test=[]):
@@ -213,15 +220,18 @@ class ClassModel:
                     self.V -= learning_rate * dV
                     self.Q -= learning_rate * dQ
                     pool.close()
-                '''
+                
                 if (i+1)%20 == 0:
+                    self.test(X_test, Y_test)
+                    '''
                     loss = self.calculate_total_loss(X, Y)
                     print("PPL:%.2f"%2.0**loss)
-                '''
+                    '''
+                
             print("training time %d[s]"%(time.time() - start))
             #np.random.shuffle(number)
                         
-            loss = self.calculate_total_loss(X, Y)    
+            loss = self.calculate_total_loss(X, Y, True)    
             losses.append((num_examples_seen, loss))
             dtime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (dtime, num_examples_seen, epoch, loss))
