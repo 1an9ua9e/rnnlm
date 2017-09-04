@@ -28,6 +28,7 @@ class RNNLayer:
         dU, dx = mulGate.backward(U, x, dmulu)
         return (dprev_s, dU, dW, dV)
 
+
 class LinTwoInputRNNLayer:
     def forward(self, x, prev_s, prev_prev_s, U, W, V, Q):
         self.mulu = mulGate.forward(U, x)
