@@ -10,6 +10,7 @@ from rnn_with_ns import NS_Model
 from rnn_with_truncation import TRC_Model
 from linear_two_input_rnn import LinTwoInputModel
 from rnn_with_blackout import RNN_BlackOut
+from efrnn import EFRNN
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -28,7 +29,7 @@ parser.add_argument("--test_data_size", type=int, default=1000)
 parser.add_argument("--record", type=bool, default=False)
 
 args = parser.parse_args()
-fname= "network" + args.network + "V-" + args.word_dim + "-hidden-" + args.hidden_dim + "-class-" + args.class_dim + "-batch-" + args.batch_size + "-epoch-" + args.epoch + "-sort-" + args.sort + "-shuffle-" + args.shuffle + "-data_size-" + args.data_size +   "test_size" +  args.test_data_size
+fname= "network" + args.network + "V-" + str(args.word_dim) + "-hidden-" + str(args.hidden_dim) + "-class-" + str(args.class_dim) + "-batch-" + str(args.batch_size) + "-epoch-" + str(args.epoch) + "-sort-" + str(args.sort) + "-shuffle-" + str(args.shuffle) + "-data_size-" + str(args.data_size) +   "test_size" +  str(args.test_data_size)
 '''
 word_dim = args.word_dim
 hidden_dim = args.hidden_dim
@@ -63,6 +64,14 @@ if args.network == "classRNN":
     '''
     # ハードクラスタリングの場合
     rnn = ClassModel(args.word_dim, args.hidden_dim, class_dim=args.class_dim,
+                           index_to_class=index_to_class, class_to_word_list=class_to_word_list)
+    losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
+                       learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
+                       X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
+                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1])
+    
+elif args.network == "EFRNN":
+    rnn = EFRNN(args.word_dim, args.hidden_dim, class_dim=args.class_dim,
                            index_to_class=index_to_class, class_to_word_list=class_to_word_list)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
