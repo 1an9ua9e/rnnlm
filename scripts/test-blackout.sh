@@ -8,5 +8,5 @@ data=$HOME/nlp-research/corpus/one-billion-word-benchmark/1-billion-word-languag
 
 #python $src/rnnlm.py --word_dim 10000 --hidden_dim 50 --batch_size 15 --epoch 5 --data_size 10000 --sort 1 --network RNN_BlackOut --test_data_size 3000 --training_data $data/news.en-00001-of-00100 
 
-python $src/rnnlm.py --word_dim 10000 --hidden_dim 50 --class_dim 30 --class_type 0 --batch_size 15 --epoch 5 --sort 1 --network EFRNN --data_size 10000 --test_data_size 3000 --training_data $data/news.en-00001-of-00100
+python $src/rnnlm.py --word_dim 10000 --hidden_dim 50 --class_dim 30 --class_type 0 --batch_size 15 --epoch 5 --sort 1 --network EFRNN --data_size 10000 --test_data_size 3000 --training_data $data/news.en-00001-of-00100 --alpha 0.5 --interval 50
 #python $src/rnnlm.py --word_dim 10000 --hidden_dim 50 --batch_size 15 --epoch 5 --data_size 10000 --sort 1 --network RNNwithNCE --test_data_size 3000 --training_data $data/news.en-00001-of-00100

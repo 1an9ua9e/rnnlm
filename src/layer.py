@@ -220,7 +220,7 @@ class ClassRNNLayer:
             self.mulv = mulGate.sub_forward(V, self.s, word_list)
    
 
-    def backward(self, x, prev_s, U, W, V, Q, diff_s, dmulv, dmulq, word_list, y_t, class_y_t, centroids = [], word2class = []):
+    def backward(self, x, prev_s, U, W, V, Q, diff_s, dmulv, dmulq, word_list, y_t, class_y_t, centroids = [], word2class = [], alpha=1.0):
         self.forward(x, prev_s, U, W, V, Q, word_list, y_t)
         # 以下のコードは部分的にbackwardする処理になっているか？
         #dV, dsv = mulGate.sub_backward(V, self.s, dmulv)
@@ -228,7 +228,7 @@ class ClassRNNLayer:
         if centroids != []:
             l = len(x)
             for w in range(l):
-                dV[w] += 2 * centroids[word2class[w]]
+                dV[w] += 2 * centroids[word2class[w]] * alpha
         dQ, dsq = mulGate.backward(Q, self.s, dmulq)
         ds = dsv + dsq + diff_s
         dadd = tanh.backward(self.add, ds)

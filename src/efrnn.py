@@ -14,7 +14,7 @@ import itertools as itr
 import utils
 
 class EFRNN:
-    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4,class_dim=0,index_to_class=[],class_to_word_list=[]):
+    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4,class_dim=0,index_to_class=[],class_to_word_list=[], alpha=1.0, interval=1):
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.class_dim = class_dim
@@ -27,6 +27,11 @@ class EFRNN:
         #self.class_dist = np.array(index_to_class_dist)
         self.word2class = np.array(index_to_class)
         self.word_list = np.array(class_to_word_list)
+        
+        # 評価関数にかける係数
+        self.alpha = alpha
+        # データ(interval)個につき１回クラスター指標を考慮したbackwardを行う
+        self.interval = interval
     '''
         forward propagation (predicting word probabilities)
         x is one single data, and a batch of data
@@ -141,7 +146,7 @@ class EFRNN:
                 
         
         
-    def bptt(self, x, y):
+    def bptt(self, x, y, data_id):
         assert len(x) == len(y)
         output = Softmax()
         class_output = ClassSoftmax()
@@ -167,9 +172,16 @@ class EFRNN:
             dmulq = class_output.diff(layers[t].mulq, class_y_t)
             input = np.zeros(self.word_dim)
             input[x[t]] = 1
-            dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(
-                input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq,
-                word_list, y[t], class_y_t, self.calculate_centroids(), self.word2class)
+            
+            # データ50個に１個のペースで、単語ベクトルのクラスター指標を考慮したbackwardを行う
+            if data_id%self.interval == 0:
+                dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(
+                    input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq,
+                    word_list, y[t], class_y_t, self.calculate_centroids(), self.word2class, self.alpha)
+            else:
+                dprev_s, dU_t, dW_t, dV_t, dQ_t = layers[t].backward(
+                    input, prev_s_t, self.U, self.W, self.V, self.Q, diff_s, dmulv, dmulq, [], -1, -1)
+                
             prev_s_t = layers[t].s
             dmulv = np.zeros(self.word_dim)
             dmulq = np.zeros(self.class_dim)
@@ -190,7 +202,8 @@ class EFRNN:
         x = data[0]
         y = data[1]
         learning_rate = data[2]
-        dU, dW, dV, dQ = self.bptt(x, y)
+        data_id = data[3]
+        dU, dW, dV, dQ = self.bptt(x, y, data_id)
         #print(os.getpid())
         #self.U -= learning_rate * dU
         #self.V -= learning_rate * dV
@@ -238,7 +251,7 @@ class EFRNN:
                     data_list = []
                     for j in range(batch_size):
                         index = number[i] * batch_size + j
-                        data_list.append([X[index],Y[index],learning_rate])
+                        data_list.append([X[index],Y[index],learning_rate, index])
                     pool = mp.Pool(batch_size)
                     args = zip(itr.repeat(self),itr.repeat('sgd_step'),data_list)
                     dU,dW,dV,dQ = np.sum(np.array(pool.map(utils.tomap,args)),axis=0)
@@ -248,7 +261,7 @@ class EFRNN:
                     self.Q -= learning_rate * dQ
                     pool.close()
                 
-                if (i+1)%20 == 0:
+                if (i+1)%80 == 0:
                     self.test(X_test, Y_test)
                     print("eval func : %.2f"%self.calculate_ef_loss())
                     '''
