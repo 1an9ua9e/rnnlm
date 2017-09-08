@@ -228,7 +228,7 @@ class ClassRNNLayer:
         if centroids != []:
             l = len(x)
             for w in range(l):
-                dV[w] += 2 * centroids[word2class[w]] * alpha
+                dV[w] += alpha * 2.0 * (V[w] - centroids[word2class[w]])
         dQ, dsq = mulGate.backward(Q, self.s, dmulq)
         ds = dsv + dsq + diff_s
         dadd = tanh.backward(self.add, ds)

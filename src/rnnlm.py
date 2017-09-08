@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import time
+import datetime
 from preprocessing import getSentenceData
 from rnn import Model
 from class_rnn import ClassModel
@@ -30,6 +31,7 @@ parser.add_argument("--test_data_size", type=int, default=1000)
 parser.add_argument("--record", type=bool, default=False)
 parser.add_argument("--alpha", type=float, default=1.0)
 parser.add_argument("--interval", type=int, default=1)
+parser.add_argument("--class_change_interval", type=int, default=1)
 
 args = parser.parse_args()
 fname= "network" + args.network + "V-" + str(args.word_dim) + "-hidden-" + str(args.hidden_dim) + "-class-" + str(args.class_dim) + "-batch-" + str(args.batch_size) + "-epoch-" + str(args.epoch) + "-sort-" + str(args.sort) + "-shuffle-" + str(args.shuffle) + "-data_size-" + str(args.data_size) +   "test_size" +  str(args.test_data_size)
@@ -75,7 +77,7 @@ if args.network == "classRNN":
     
 elif args.network == "EFRNN":
     rnn = EFRNN(args.word_dim, args.hidden_dim, class_dim=args.class_dim,
-                           index_to_class=index_to_class, class_to_word_list=class_to_word_list, alpha=args.alpha, interval=args.interval)
+                           index_to_class=index_to_class, class_to_word_list=class_to_word_list, alpha=args.alpha, interval=args.interval, class_change_interval=args.class_change_interval)
     losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
                        X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
@@ -131,9 +133,10 @@ elif args.network == "RNNwithTRC":
 
 print("training time : %.2f[s]"%(time.time() - start))
 
+fname = args.network + str(datetime.datetime.today()).split()[0]
 if os.path.isfile("../result/" + fname + ".csv"):
     os.remove("../result/" + fname + ".csv")
-f = open("../result/" + fname + ".csv", "w")
+f = open("../result/" + fname + ".csv", "a")
 f.write("epoch,PPL\n")
 for i in range(args.epoch):
     f.write("%.2f,%.2f\n"%(losses[i], test_losses[i]))

@@ -14,7 +14,7 @@ import itertools as itr
 import utils
 
 class EFRNN:
-    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4,class_dim=0,index_to_class=[],class_to_word_list=[], alpha=1.0, interval=1):
+    def __init__(self, word_dim, hidden_dim=100, bptt_truncate=4,class_dim=0,index_to_class=[],class_to_word_list=[], alpha=1.0, interval=1, class_change_interval=1):
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.class_dim = class_dim
@@ -32,6 +32,8 @@ class EFRNN:
         self.alpha = alpha
         # データ(interval)個につき１回クラスター指標を考慮したbackwardを行う
         self.interval = interval
+        # 現時点でのクラス割り当てから計算したセントロイドに基づき、クラス割り当てを変更する操作の間隔
+        self.class_change_interval = class_change_interval
     '''
         forward propagation (predicting word probabilities)
         x is one single data, and a batch of data
@@ -121,7 +123,7 @@ class EFRNN:
         return loss / float(len(Y))
     
     def d(self, a, b):
-        return np.dot(a, b)
+        return math.sqrt(np.dot(a-b, a-b))
     
     def calculate_centroids(self):
         centroids = []
@@ -144,9 +146,23 @@ class EFRNN:
                 S += self.d(self.V[w], centroids[c])
         return S
                 
-        
+    def calculate_word2class(self, centroids):
+        word2class = [0] * self.word_dim
+        for w in range(self.word_dim):
+            min = 1000000000.0
+            c = self.word2class[w]
+            for i,r in enumerate(centroids):
+                d = self.d(self.V[w], r)
+                if d < min:
+                    min = d
+                    c = i
+            word2class[w] = c
+        return word2class
         
     def bptt(self, x, y, data_id):
+        if data_id % self.class_change_interval == 0:
+            centroids = self.calculate_centroids()
+            self.word2class = self.calculate_word2class(centroids)
         assert len(x) == len(y)
         output = Softmax()
         class_output = ClassSoftmax()
@@ -260,10 +276,11 @@ class EFRNN:
                     self.V -= learning_rate * dV
                     self.Q -= learning_rate * dQ
                     pool.close()
-                
-                if (i+1)%80 == 0:
+                '''
+                if (i+1)%20 == 0:
                     self.test(X_test, Y_test)
                     print("eval func : %.2f"%self.calculate_ef_loss())
+                '''
                     '''
                     loss = self.calculate_total_loss(X, Y)
                     print("PPL:%.2f"%2.0**loss)
@@ -281,6 +298,7 @@ class EFRNN:
                 learning_rate = learning_rate * 0.5
                 print("Setting learning rate to %f" % learning_rate)
             sys.stdout.flush()
+            print("Evaluation function : %.2f"%self.calculate_ef_loss())
             print("Training Perplexity : %.2f"%2**loss)
             if X_test != []:
                 self.test(X_test, Y_test)
