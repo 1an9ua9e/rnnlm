@@ -45,19 +45,21 @@ class Model:
         layers = self.forward_propagation(x)
         return [np.argmax(output.predict(layer.mulv)) for layer in layers]
 
-    def calculate_loss(self, x, y):
+    def calculate_loss(self, x, y, eos):
         assert len(x) == len(y)
         output = Softmax()
         layers = self.forward_propagation(x)
         loss = 0.0
         for i, layer in enumerate(layers):
+            if eos and i == len(x) - 1:
+                return loss / float(len(y) - 1)
             loss += output.loss(layer.mulv, y[i])
         return loss / float(len(y))
 
-    def calculate_total_loss(self, X, Y):
+    def calculate_total_loss(self, X, Y, eos):
         loss = 0.0
         for i in range(len(Y)):
-            loss += self.calculate_loss(X[i], Y[i])
+            loss += self.calculate_loss(X[i], Y[i], eos)
         return loss / float(len(Y))
 
     def bptt(self, x, y):
@@ -101,13 +103,13 @@ class Model:
         #self.W -= learning_rate * dW
         return np.array([dU,dW,dV])
 
-    def test(self, X, Y):
-        loss = self.calculate_total_loss(X, Y)
+    def test(self, X, Y, eos):
+        loss = self.calculate_total_loss(X, Y, eos)
         ppl = 2.0 ** loss
         print("Test Perplexity : %.2f" % ppl)
         return ppl
 
-    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5,batch_size=1, X_test=[], Y_test=[]):
+    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5,batch_size=1, X_test=[], Y_test=[], eos=False):
         num_examples_seen = 0
         losses = []
         test_losses = []
@@ -151,20 +153,20 @@ class Model:
             print("training time %d[s]"%(time.time() - start))
 
             #if (epoch % evaluate_loss_after == 0):
-            loss = self.calculate_total_loss(X, Y)
+            loss = self.calculate_total_loss(X, Y, eos)
             ppl = 2.0 ** loss
             losses.append(ppl)
 
             dtime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (dtime, num_examples_seen, epoch, loss))
             # Adjust the learning rate if loss increases
-            if len(losses) > 1 and losses[-1][1] > losses[-2][1]:
+            if len(losses) > 1 and losses[-1] > losses[-2]:
                 learning_rate = learning_rate * 0.5
                 print("Setting learning rate to %f" % learning_rate)
             sys.stdout.flush()
             print("Training Perplexity : %.2f"%2**loss)
             if X_test != []:
-                test_ppl = self.test(X_test, Y_test)
+                test_ppl = self.test(X_test, Y_test, eos)
                 test_losses.append(test_ppl)
 
         return (losses, test_losses)

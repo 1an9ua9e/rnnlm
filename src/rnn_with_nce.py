@@ -83,12 +83,15 @@ class RNN_NCE:
         layers = self.forward_propagation(x)
         return [np.argmax(output.predict(layer.mulv)) for layer in layers]
 
-    def calculate_loss(self, x, y, data_number, a="softmax"):
+    def calculate_loss(self, x, y, eos, data_number, a="softmax"):
         assert len(x) == len(y)
         output = Softmax()
         layers = self.forward_propagation(x)
         loss = 0.0
         for i, layer in enumerate(layers):
+            if eos and i == len(x) - 1:
+                return loss / float(len(y) - 1)
+            
             if a=="nce":# NCEで予測したときの損失
                 loss += np.log(abs(self.Z)) - layer.mulv[y[i]]
                 
@@ -107,10 +110,10 @@ class RNN_NCE:
             #loss += output.loss(layer.mulv, y[i])
         return loss / float(len(y))
 
-    def calculate_total_loss(self, X, Y, a):
+    def calculate_total_loss(self, X, Y, eos, a):
         loss = 0.0
         for i in range(len(Y)):
-            loss += self.calculate_loss(X[i], Y[i], i, a)
+            loss += self.calculate_loss(X[i], Y[i], eos, i, a)
         return loss / float(len(Y))
     
     # データが真の分布から生成されるときの確率
@@ -203,11 +206,13 @@ class RNN_NCE:
         #self.W -= learning_rate * dW
         return np.array([dU,dW,dV,dZ])
 
-    def test(self, X, Y):
-        loss = self.calculate_total_loss(X, Y, "softmax")
+    def test(self, X, Y, eos):
+        loss = self.calculate_total_loss(X, Y, eos, "softmax")
         print("Test Perplexity : %.2f" % 2**loss)
+        return loss
 
-    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5, batch_size=1, record=False, X_test=[], Y_test=[]):
+    def train(self, X, Y, learning_rate=0.005, nepoch=100, evaluate_loss_after=5, batch_size=1, record=False,
+              X_test=[], Y_test=[], eos=False):
         data_size = len(Y)
         #self.rcd = Record("nce", self.hidden_dim, self.word_dim, data_size, batch_size)
         record = False
@@ -215,6 +220,7 @@ class RNN_NCE:
             self.rcd.create()
         num_examples_seen = 0
         losses = []
+        test_losses = []
         max_batch_loop = math.floor(data_size / batch_size)
         number = [i for i in range(max_batch_loop)] # データの処理の順番
         self.max_len = len(X[-1]) # 文の最大の長さ
@@ -279,22 +285,24 @@ class RNN_NCE:
             #np.random.shuffle(number)
             print("training time %d[s]"%(time.time() - start))
             print("partition function Z = %.2f"%self.Z)
-            loss = self.calculate_total_loss(X, Y,"softmax")
-            losses.append((num_examples_seen, loss))
+            loss = self.calculate_total_loss(X, Y, eos, "softmax")
+            ppl = 2.0 ** loss
+            losses.append(ppl)
             dtime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             print("%s: Loss after num_examples_seen=%d epoch=%d: %f" % (dtime, num_examples_seen, epoch, loss))
             # Adjust the learning rate if loss increases
-            if len(losses) > 1 and losses[-1][1] > losses[-2][1]:
+            if len(losses) > 1 and losses[-1] > losses[-2]:
                 learning_rate = learning_rate * 0.5
                 print("Setting learning rate to %f" % learning_rate)
             sys.stdout.flush()
-            ppl = 2.0 ** loss
             print("Train Perplexity : %.2f"%ppl)
             if X_test != []:
-                self.test(X_test, Y_test)
+                test_loss = self.test(X_test, Y_test, eos)
+                test_ppl = 2.0 ** test_loss
+                test_losses.append(test_ppl)
             if record:
                 self.rcd.write(epoch+1, ppl)
 
-        return losses
+        return (losses,test_losses)
 
                         

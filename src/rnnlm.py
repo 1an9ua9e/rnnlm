@@ -32,6 +32,7 @@ parser.add_argument("--record", type=bool, default=False)
 parser.add_argument("--alpha", type=float, default=1.0)
 parser.add_argument("--interval", type=int, default=1)
 parser.add_argument("--class_change_interval", type=int, default=1)
+parser.add_argument("--eos", type=bool, default=False, help="use End Of Sentence")
 
 args = parser.parse_args()
 fname= "network" + args.network + "V-" + str(args.word_dim) + "-hidden-" + str(args.hidden_dim) + "-class-" + str(args.class_dim) + "-batch-" + str(args.batch_size) + "-epoch-" + str(args.epoch) + "-sort-" + str(args.sort) + "-shuffle-" + str(args.shuffle) + "-data_size-" + str(args.data_size) +   "test_size" +  str(args.test_data_size)
@@ -70,25 +71,25 @@ if args.network == "classRNN":
     # ハードクラスタリングの場合
     rnn = ClassModel(args.word_dim, args.hidden_dim, class_dim=args.class_dim,
                            index_to_class=index_to_class, class_to_word_list=class_to_word_list)
-    losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
+    losses,test_losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
                        X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
-                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1])
+                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1], eos=args.eos)
     
 elif args.network == "EFRNN":
     rnn = EFRNN(args.word_dim, args.hidden_dim, class_dim=args.class_dim,
                            index_to_class=index_to_class, class_to_word_list=class_to_word_list, alpha=args.alpha, interval=args.interval, class_change_interval=args.class_change_interval)
-    losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
+    losses,test_losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
                        X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
-                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1])
+                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1], eos=args.eos)
 
 elif args.network == "RNN":
     rnn = Model(args.word_dim, args.hidden_dim)
     losses, test_losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
                        X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
-                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1])
+                                    Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1], eos=args.eos)
 
 elif args.network == "GRU":
     rnn = GRUModel(args.word_dim, args.hidden_dim)
@@ -97,10 +98,10 @@ elif args.network == "GRU":
 
 elif args.network == "RNNwithNCE":
     rnn = RNN_NCE(unigram, args.word_dim, args.hidden_dim)
-    losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
+    losses,test_losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,record=args.record,
                        X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
-                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1])
+                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1], eos=args.eos)
 
 elif args.network == "LinTwoInputRNN":
     rnn = LinTwoInputModel(args.word_dim, args.hidden_dim)
@@ -111,10 +112,10 @@ elif args.network == "LinTwoInputRNN":
 
 elif args.network == "RNN_BlackOut":
     rnn = RNN_BlackOut(unigram, args.word_dim, args.hidden_dim)
-    losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
+    losses,test_losses = rnn.train(X_train[:args.data_size], y_train[:args.data_size],
                        learning_rate=0.005, nepoch=args.epoch, evaluate_loss_after=1,batch_size=args.batch_size,
                        X_test=X_train[args.data_size:args.data_size + args.test_data_size - 1],
-                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1])
+                       Y_test=y_train[args.data_size:args.data_size + args.test_data_size - 1], eos=args.eos)
 
 elif args.network == "RNNwithIS":
     rnn = IS_Model(unigram, args.word_dim, args.hidden_dim)
@@ -133,13 +134,13 @@ elif args.network == "RNNwithTRC":
 
 print("training time : %.2f[s]"%(time.time() - start))
 
-fname = args.network + str(datetime.datetime.today()).split()[0]
+fname = args.network + "-" +  str(datetime.datetime.today()).split()[0]
 if os.path.isfile("../result/" + fname + ".csv"):
     os.remove("../result/" + fname + ".csv")
 f = open("../result/" + fname + ".csv", "a")
-f.write("epoch,PPL\n")
+f.write("epoch,trainPPL,testPPL\n")
 for i in range(args.epoch):
-    f.write("%.2f,%.2f\n"%(losses[i], test_losses[i]))
+    f.write("%d,%.2f,%.2f\n"%(i,losses[i], test_losses[i]))
 f.close()
 
 
